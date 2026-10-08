@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CLI Bridger</title>
+</head>
+<body>
+  <main class="workbench">
+    <header class="app-header">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">&gt;_</span><h1>CLI Bridger</h1><span class="badge">DESKTOP</span></div>
+      <span id="status" role="status">尚未連接</span>
+    </header>
+    <aside class="command-sidebar" aria-label="指令導覽">
+      <h2>COMMANDS <span>指令</span></h2>
+      <div id="commands"></div>
+      <p class="sidebar-hint">選擇指令後，設定對應參數。</p>
+    </aside>
+    <div class="workspace">
+      <section class="tool-section" aria-labelledby="tool-heading">
+        <h2 id="tool-heading">CLI TOOL <span>選擇工具</span></h2>
+        <div class="toolbar">
+          <select id="runner" aria-label="執行方式"><option value="auto">自動辨識</option><option value="python">Python</option><option value="node">Node.js</option><option value="powershell">PowerShell</option><option value="custom">自訂執行器</option></select>
+          <input id="executable" aria-label="CLI 執行檔或腳本" placeholder="工具名稱，或 .exe / .py / .js / .ps1 路徑" spellcheck="false">
+          <button id="browse">瀏覽…</button>
+          <button id="load" class="primary">讀取規格</button>
+        </div>
+        <div id="custom-runner-row" class="toolbar custom-runner" hidden><input id="custom-runner" aria-label="自訂執行器" placeholder="例如 C:\project\.venv\Scripts\python.exe"><button id="browse-runner">選擇執行器…</button></div>
+        <p class="hint tool-hint">工具需支援 <code>--cli-bridger-describe</code>。讀取規格會執行程式，請選擇你信任的工具。</p>
+      </section>
+      <div id="error" role="alert" hidden></div>
+      <section class="parameter-section" aria-labelledby="parameter-heading">
+        <div class="section-heading"><h2 id="parameter-heading">PARAMETERS <span>參數設定</span></h2><span class="hint">必填項目自動啟用</span></div>
+        <div id="description" class="hint description">載入工具後，這裡會顯示指令與參數。</div>
+        <fieldset id="fields" disabled aria-label="指令參數"><div id="parameters"></div></fieldset>
+        <div class="preview"><span>ARGUMENTS</span><code id="preview">等待選擇工具</code></div>
+        <div class="toolbar actions"><span class="hint">執行前會再次檢查所有參數。</span><button id="stop" disabled>停止</button><button id="run" class="primary" disabled>執行指令 <span aria-hidden="true">↵</span></button></div>
+      </section>
+      <section class="terminal-section" aria-labelledby="terminal-heading">
+        <div class="section-heading"><h2 id="terminal-heading">OUTPUT <span>終端輸出</span></h2><button id="clear" class="quiet">清除畫面</button></div>
+        <div id="terminal" aria-label="互動終端"></div>
+      </section>
+      <details class="raw-section"><summary>CLI 原始格式說明 <span>JSON</span></summary><pre id="raw">尚未載入</pre></details>
+    </div>
+  </main>
+  <script type="module" src="/src.js"></script>
+</body>
+</html>
