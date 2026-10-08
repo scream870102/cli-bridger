@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,221 @@ import (
 	"github.com/UserExistsError/conpty"
 	bolt "go.etcd.io/bbolt"
 )
+
+func TestToolSettingsSwitchAndRestart(t *testing.T) {
+	for _, scripts := range []bool{false, true} {
+		t.Run(map[bool]string{false: "executables", true: "scripts"}[scripts], func(t *testing.T) {
+			a, first := settingsTestApp(t)
+			runner := first.Target
+			second := first
+			second.Target = filepath.Join(filepath.Dir(first.Target), "second.exe")
+			second.Path = []string{"root", "second"}
+			second.Values = map[string]any{"zero": float64(42), "false": true, "blank": "second"}
+			second.Enabled = map[string]bool{"zero": false, "false": true}
+			if scripts {
+				first.Target = filepath.Join(filepath.Dir(runner), "first.py")
+				second.Target = filepath.Join(filepath.Dir(runner), "second.py")
+				first.Runner, second.Runner = "custom", "custom"
+				first.CustomRunner, second.CustomRunner = runner, runner
+			}
+			load := func(app *App, s Settings, raw string) {
+				t.Helper()
+				executable, prefix := s.Target, []string(nil)
+				if scripts {
+					executable, prefix = runner, []string{s.Target}
+				}
+				if _, err := app.acceptDescription(executable, prefix, []byte(raw), s.Target+".cli-bridger.json"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, s := range []Settings{first, second} {
+				if err := os.WriteFile(s.Target, []byte("not executable"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				load(a, s, settingsTestDescription)
+				if err := a.SaveSettings(s); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, app := range []*App{a, {settingsPath: a.settingsPath}} {
+				last, err := app.LoadSettings()
+				if err != nil || last == nil || !reflect.DeepEqual(last.Settings, second) {
+					t.Fatalf("last tool: %#v, %v", last, err)
+				}
+				for _, s := range []Settings{first, second, first} {
+					fresh := strings.Replace(settingsTestDescription, `"description":"test"`, `"description":"fresh"`, 1)
+					load(app, s, fresh)
+					current := app.descriptor
+					got, err := app.GetToolSettings()
+					if err != nil || got == nil || !reflect.DeepEqual(got.Settings, s) || got.Loaded == nil {
+						t.Fatalf("tool %q: %#v, %v", s.Target, got, err)
+					}
+					if app.descriptor != current || got.Loaded.Descriptor.Description == current.Description {
+						t.Fatal("cache replaced fresh schema or lost prior schema")
+					}
+				}
+			}
+			pending := Settings{Target: "unfinished", HasDescriptor: false}
+			if err := a.SaveSettings(pending); err != nil {
+				t.Fatal(err)
+			}
+			for _, s := range []Settings{first, second} {
+				load(a, s, settingsTestDescription)
+				got, err := a.GetToolSettings()
+				if err != nil || got == nil || !reflect.DeepEqual(got.Settings, s) {
+					t.Fatalf("pending erased history: %#v, %v", got, err)
+				}
+			}
+			load(a, first, settingsTestDescription)
+			current := a.descriptor
+			if err := a.ResetSettings(); err != nil {
+				t.Fatal(err)
+			}
+			if a.descriptor != current || a.executable == "" {
+				t.Fatal("reset replaced current descriptor")
+			}
+			for _, s := range []Settings{first, second} {
+				load(a, s, settingsTestDescription)
+				got, err := a.GetToolSettings()
+				if err != nil || (s.Target == first.Target && got != nil) || (s.Target == second.Target && (got == nil || !reflect.DeepEqual(got.Settings, second))) {
+					t.Fatalf("reset changed incorrect history: %#v, %v", got, err)
+				}
+			}
+		})
+	}
+}
+
+func TestToolSettingsLegacyMigration(t *testing.T) {
+	for _, pending := range []bool{false, true} {
+		t.Run(map[bool]string{false: "loaded", true: "pending"}[pending], func(t *testing.T) {
+			a, first := settingsTestApp(t)
+			raw, err := json.Marshal(settingsRecord{Settings: first, Raw: json.RawMessage(settingsTestDescription), DescriptionFile: a.descriptionFile})
+			if err != nil {
+				t.Fatal(err)
+			}
+			db, err := bolt.Open(a.settingsPath, 0600, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = db.Update(func(tx *bolt.Tx) error {
+				bucket, err := tx.CreateBucket([]byte("settings"))
+				if err != nil {
+					return err
+				}
+				return bucket.Put([]byte("last"), raw)
+			})
+			db.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, err := a.GetToolSettings(); err != nil || got == nil || !reflect.DeepEqual(got.Settings, first) {
+				t.Fatalf("legacy lookup: %#v, %v", got, err)
+			}
+			second := Settings{Target: filepath.Join(filepath.Dir(first.Target), "second.exe"), Runner: "auto", HasDescriptor: !pending}
+			if !pending {
+				if err := os.WriteFile(second.Target, []byte("not executable"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := a.acceptDescription(second.Target, nil, []byte(settingsTestDescription), ""); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := a.SaveSettings(second); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := a.acceptDescription(strings.ToUpper(first.Target), nil, []byte(settingsTestDescription), ""); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := a.GetToolSettings(); err != nil || got == nil || !reflect.DeepEqual(got.Settings, first) {
+				t.Fatalf("migrated case-insensitive history: %#v, %v", got, err)
+			}
+		})
+	}
+}
+
+func TestToolSettingsInvalidHistory(t *testing.T) {
+	a, settings := settingsTestApp(t)
+	if err := a.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	key, err := toolSettingsKey(a.executable, a.prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{"{", "null", strings.Repeat("x", settingsLimit+1), `{"settings":{"hasDescriptor":true},"raw":{"version":"invalid"}}`} {
+		db, err := bolt.Open(a.settingsPath, 0600, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = db.Update(func(tx *bolt.Tx) error { return tx.Bucket([]byte("tools")).Put(key, []byte(raw)) })
+		db.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := a.GetToolSettings(); err == nil {
+			t.Fatal("invalid tool history accepted")
+		}
+	}
+}
+
+func TestToolSettingsResetLegacyAndLast(t *testing.T) {
+	for _, sameTool := range []bool{false, true} {
+		for _, pending := range []bool{false, true} {
+			a, settings := settingsTestApp(t)
+			last := settings
+			last.HasDescriptor = !pending
+			if !sameTool {
+				last.Target = filepath.Join(filepath.Dir(settings.Target), "other.exe")
+			}
+			raw, err := json.Marshal(settingsRecord{Settings: last, Raw: json.RawMessage(settingsTestDescription)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			db, err := bolt.Open(a.settingsPath, 0600, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = db.Update(func(tx *bolt.Tx) error {
+				bucket, err := tx.CreateBucket([]byte("settings"))
+				if err != nil {
+					return err
+				}
+				return bucket.Put([]byte("last"), raw)
+			})
+			db.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := a.ResetSettings(); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := a.GetToolSettings(); err != nil || got != nil {
+				t.Fatalf("reset resurrected legacy current tool: %#v, %v", got, err)
+			}
+			restored, err := (&App{settingsPath: a.settingsPath}).LoadSettings()
+			if err != nil || (sameTool && restored != nil) || (!sameTool && (restored == nil || !reflect.DeepEqual(restored.Settings, last))) {
+				t.Fatalf("reset last record same=%v pending=%v: %#v, %v", sameTool, pending, restored, err)
+			}
+			if !sameTool && !pending {
+				if _, err := a.acceptDescription(last.Target, nil, []byte(settingsTestDescription), ""); err != nil {
+					t.Fatal(err)
+				}
+				if got, err := a.GetToolSettings(); err != nil || got == nil || !reflect.DeepEqual(got.Settings, last) {
+					t.Fatalf("reset lost other legacy tool: %#v, %v", got, err)
+				}
+			}
+		}
+	}
+	a, _ := settingsTestApp(t)
+	current := a.descriptor
+	if err := a.ResetSettings(); err != nil || a.descriptor != current {
+		t.Fatalf("missing DB reset changed descriptor: %v", err)
+	}
+	a.descriptor = nil
+	if err := a.ResetSettings(); err == nil {
+		t.Fatal("reset accepted no loaded tool")
+	}
+}
 
 const settingsTestDescription = `{"version":"1","name":"測試","description":"test","root":{"id":"root","description":"root"}}`
 
@@ -55,8 +271,8 @@ func TestSettingsRoundTripAndReset(t *testing.T) {
 	if err := restarted.ResetSettings(); err != nil {
 		t.Fatal(err)
 	}
-	if restarted.descriptor != nil || restarted.executable != "" || restarted.descriptionFile != "" {
-		t.Fatal("reset retained in-memory state")
+	if restarted.descriptor == nil || restarted.executable != settings.Target || restarted.descriptionFile != a.descriptionFile {
+		t.Fatal("reset lost in-memory descriptor")
 	}
 	if _, err := os.Stat(neighbor); err != nil {
 		t.Fatal("reset touched unrelated DB", err)
@@ -114,11 +330,11 @@ func TestSettingsCorruptionAndReset(t *testing.T) {
 	if _, err := a.LoadSettings(); err == nil {
 		t.Fatal("corruption not reported")
 	}
-	if err := a.ResetSettings(); err != nil {
-		t.Fatal(err)
+	if err := a.ResetSettings(); err == nil {
+		t.Fatal("reset did not report corrupt DB")
 	}
-	if _, err := os.Stat(a.settingsPath); !os.IsNotExist(err) {
-		t.Fatalf("corrupt DB not removed: %v", err)
+	if raw, err := os.ReadFile(a.settingsPath); err != nil || string(raw) != "corrupt database" {
+		t.Fatalf("reset changed corrupt DB: %v", err)
 	}
 }
 

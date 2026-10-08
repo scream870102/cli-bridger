@@ -5,7 +5,7 @@ import '@xterm/xterm/css/xterm.css';
 import './style.css';
 
 const $ = id => document.getElementById(id);
-const backend = Object.fromEntries(['Describe','Reload','PickPath','Preview','Run','Stop','Input','Resize','LoadSettings','SaveSettings','ResetSettings'].map(name=>[name,(...args)=>Call.ByName(`main.App.${name}`,...args)]));
+const backend = Object.fromEntries(['Describe','Reload','PickPath','Preview','Run','Stop','Input','Resize','LoadSettings','GetToolSettings','SaveSettings','ResetSettings'].map(name=>[name,(...args)=>Call.ByName(`main.App.${name}`,...args)]));
 const api = () => backend;
 const terminal = new Terminal({convertEol:false, fontFamily:'Cascadia Code, Consolas, monospace',fontSize:16,lineHeight:1.2,scrollback:5000,theme:{background:'#121212',foreground:'#f0f0f0',cursor:'#E28C91'}});
 const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open($('terminal')); fit.fit();
@@ -21,11 +21,25 @@ function saveSettings() {
 }
 function setDescriptionSource(file='') { descriptionFile=file; $('source-warning').hidden=!file; $('source-path').textContent=file?`來源檔案：${file}`:''; }
 function error(e) { $('error').hidden=!e; $('error').textContent=e ? String(e) : ''; }
-function busy(value) { running=value; inputGeneration++; $('reset-settings').disabled=value; $('terminal-input').disabled=true; $('send-input').disabled=true; $('commands').inert=value||!descriptor; $('fields').disabled=value||!descriptor; $('run').disabled=value||!descriptor; $('reload').disabled=value||!descriptor; $('stop').disabled=!value; for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=value; $('status').textContent=value?'執行中':descriptor?'已連接':'尚未連接'; }
+function busy(value) { running=value; inputGeneration++; $('reset-settings').disabled=value||!descriptor; $('terminal-input').disabled=true; $('send-input').disabled=true; $('commands').inert=value||!descriptor; $('fields').disabled=value||!descriptor; $('run').disabled=value||!descriptor; $('reload').disabled=value||!descriptor; $('stop').disabled=!value; for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=value; $('status').textContent=value?'執行中':descriptor?'已連接':'尚未連接'; }
 async function attempt(fn) { try { error(''); await fn(); } catch(e) {error(e);} }
 function invalidate() { descriptor=null;path=[];values={};enabled={};setDescriptionSource();revision++;$('reload').hidden=true;$('commands').replaceChildren();$('parameters').replaceChildren();$('raw').textContent='尚未載入';$('preview').textContent='請讀取工具規格';$('description').textContent='載入工具後，這裡會顯示指令與參數。';busy(false);saveSettings(); }
 function el(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
 function commandChain() { const list=[descriptor.root]; for(const id of path)list.push(list.at(-1).commands.find(c=>c.id===id)); return list; }
+function restoreToolValues(saved, previous) {
+ path=[];let command=descriptor.root;
+ for(const id of saved.path||[]){const next=command.commands?.find(c=>c.id===id);if(!next)break;path.push(id);command=next;}
+ const parameters=c=>[...(c.parameters||[]),...(c.commands||[]).flatMap(parameters)];
+ const oldParameters=new Map(parameters(previous.root).map(p=>[p.id,p]));
+ values={};enabled={};
+ for(const p of parameters(descriptor.root)) {
+  const old=oldParameters.get(p.id);
+  if(old&&old.type===p.type&&old.flag===p.flag&&old.env===p.env) {
+   if(Object.hasOwn(saved.values||{},p.id))values[p.id]=saved.values[p.id];
+   if(saved.enabled?.[p.id]===true)enabled[p.id]=true;
+  }
+ }
+}
 function effective(p) { return Object.hasOwn(values,p.id)?values[p.id]:p.default; }
 function activeParameters() {
  const active=new Map();
@@ -101,7 +115,16 @@ $('runner').onchange=()=>{$('custom-runner-row').hidden=$('runner').value!=='cus
 $('browse-runner').onclick=()=>attempt(async()=>{const file=await api().PickPath('file');if(file){$('custom-runner').value=file;invalidate();}});
 $('load').onclick=()=>attempt(async()=>{
  invalidate();busy(true);$('stop').disabled=true;$('status').textContent='讀取規格中…';$('preview').textContent='讀取中…';
- try {await settingsQueue;const runner=$('runner').value==='custom'?$('custom-runner').value:$('runner').value;if(!runner.trim())throw Error('請指定執行器路徑');const result=await api().Describe($('executable').value,runner);descriptor=result.descriptor;setDescriptionSource(result.descriptionFile);path=[];values={};enabled={};$('executable').value=result.target;$('description').textContent=`${descriptor.name} — ${descriptor.description||''}`;$('raw').textContent=result.raw;render();}
+ try {
+  await settingsQueue;
+  const runner=$('runner').value==='custom'?$('custom-runner').value:$('runner').value;
+  if(!runner.trim())throw Error('請指定執行器路徑');
+  const result=await api().Describe($('executable').value,runner);
+  const cached=await api().GetToolSettings();
+  descriptor=result.descriptor;setDescriptionSource(result.descriptionFile);path=[];values={};enabled={};
+  if(cached?.loaded)restoreToolValues(cached.settings,cached.loaded.descriptor);
+  $('executable').value=result.target;$('description').textContent=`${descriptor.name} — ${descriptor.description||''}`;$('raw').textContent=result.raw;render();
+ }
  finally{busy(false);}
 });
 $('run').onclick=()=>attempt(async()=>{busy(true);terminal.clear();$('copy-status').textContent='';$('terminal-input').value='';try{await api().Run(path,values,enabled,terminal.cols,terminal.rows);$('terminal-input').disabled=!running;$('send-input').disabled=!running;terminal.focus();}catch(e){busy(false);throw e;}});
@@ -168,12 +191,12 @@ Events.On('terminal:data',event=>terminal.write(Uint8Array.from(atob(event.data)
 Events.On('terminal:exit',event=>{terminal.write(`\r\n\x1b[90m${event.data}\x1b[0m\r\n`);busy(false);preview();});
 
 $('reset-settings').onclick=async()=>{
+ if(!descriptor)return;
  settingsReady=false;busy(true);$('stop').disabled=true;$('status').textContent='重置設定中…';
  try {
   await settingsQueue;
   await api().ResetSettings();
-  $('executable').value='';$('runner').value='auto';$('custom-runner').value='';$('custom-runner-row').hidden=true;
-  $('terminal-input').value='';error('');invalidate();settingsMessage('已重置設定');
+  path=[];values={};enabled={};error('');render();settingsMessage('已清除此工具的快取，其他工具的設定不受影響');
  } catch(e) {settingsMessage(`重置失敗：${e}`,true);}
  finally {settingsReady=true;busy(false);if(descriptor)preview(false);}
 };
@@ -188,13 +211,11 @@ async function restoreSettings() {
   $('custom-runner-row').hidden=$('runner').value!=='custom';
   if(restored.loaded) {
    const loaded=restored.loaded;descriptor=loaded.descriptor;setDescriptionSource(loaded.descriptionFile);
-   path=[];let command=descriptor.root;
-   for(const id of saved.path||[]){const next=command.commands?.find(c=>c.id===id);if(!next)break;path.push(id);command=next;}
-   values=saved.values||{};enabled=saved.enabled||{};
+   restoreToolValues(saved,descriptor);
    $('raw').textContent=loaded.raw;$('description').textContent=`${descriptor.name} — ${descriptor.description}`;render();
   }
   settingsMessage(restored.warning||(restored.loaded?'已還原上次設定；規格使用儲存的版本，需要更新時請重新讀取。':'已還原上次選取的工具，請讀取規格。'),!!restored.warning);
- } catch(e) {settingsMessage(`無法還原設定：${e}。可按「重置設定」清除資料庫。`,true);}
+ } catch(e) {settingsMessage(`無法還原設定：${e}`,true);}
  finally {settingsReady=true;busy(false);if(descriptor)preview(false);}
 }
 restoreSettings();

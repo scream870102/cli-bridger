@@ -1,5 +1,19 @@
 # CLI Bridger
 
+## Completed task: per-tool settings cache (2026-10-08)
+
+User correction: cache must retain A and B independently, restoring A's values when returning from B. Last-session-only persistence was insufficient.
+Goal: add tool-path keyed history while keeping last-session restore and one-click reset of the current tool only.
+Acceptance: A/B/A values/commands/toggles isolated across app restart; distinct scripts sharing interpreter isolated; fresh tools default; compatible values restored against fresh schema; legacy last record preserved; resetting A clears only A, retains A's loaded tool with default form, preserves B, and does not recreate A's cache immediately; tests/build/actual WebView and independent review.
+Knowns: reuse bbolt; store loaded tools by canonical target path, pending selection updates last only. Main owns UI/docs; backend agent owns storage/tests. No open questions.
+Plan correction from user: reset is per-current-tool, never entire DB; disable reset with no loaded tool and surface corrupt-database errors without deleting other records. Backend and UI implementation updated accordingly.
+- [x] Separate path-keyed tool history plus last-session restore; pending selections preserve history and legacy last record migrates before overwrite.
+- [x] Freshly read schemas retain compatible cached values/commands/toggles without rolling back schema; unknown tools use defaults.
+- [x] Reset removes only current history/matching last record; current tool remains loaded with default form; other tools and database retained; pending writes cannot recreate cleared entry.
+- [x] All Go tests, frontend/production build, independent review and actual WebView restart/switch/reset tests passed.
+Verification: .cache/per-tool-smoke.mjs exercised same-interpreter scripts in different directories, A/B/A settings, Unicode/zero/false/toggles, real process restart, reset A while a save was pending, B retention after reset/restart, and new-schema incompatible binding rejection. Screenshot .cache/per-tool-preview.png inspected at 800px with no overflow. Test apps used isolated cache directories and were closed. Binary rebuilt at build/bin/cli-bridger.exe. No commit/push; no required work remains.
+User preference worth retaining: cache is per tool, not only the last session; reset means current tool only. Never infer that reset should clear every tool's history.
+
 ## Completed local fix: v1.2.0 release build failure (2026-10-08)
 
 Goal: fix the latest failed Release Windows workflow without weakening production discovery safeguards.
