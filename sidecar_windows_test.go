@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,6 +11,20 @@ import (
 )
 
 const sidecarJSON = `{"version":"1","name":"External CLI","description":"User supplied description","root":{"id":"root","description":"Run CLI","parameters":[{"id":"message","name":"Message","description":"Message to send","type":"string","flag":"--message"}]}}`
+
+func TestMain(m *testing.M) {
+	// A copied test executable provides real discovery without PowerShell's
+	// cold-start latency consuming the production discovery timeout on CI.
+	if marker := os.Getenv("BRIDGER_SIDECAR_TEST_MARKER"); marker != "" && len(os.Args) == 2 && os.Args[1] == "--cli-bridger-describe" {
+		if err := os.WriteFile(marker, []byte("executed"), 0600); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Fprintln(os.Stdout, sidecarJSON)
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
 
 func writeSidecarFixture(t *testing.T, path, contents string) {
 	t.Helper()
@@ -91,9 +106,20 @@ func TestSidecarFailuresDoNotDiscover(t *testing.T) {
 
 func TestSidecarReloadAndSourceTransitions(t *testing.T) {
 	dir := t.TempDir()
-	target := filepath.Join(dir, "cli.ps1")
+	target := filepath.Join(dir, "cli.exe")
 	marker := filepath.Join(dir, "executed")
-	writeSidecarFixture(t, target, "Set-Content -LiteralPath '"+strings.ReplaceAll(marker, "'", "''")+"' -Value executed\n'"+sidecarJSON+"'")
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary, err := os.ReadFile(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, binary, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BRIDGER_SIDECAR_TEST_MARKER", marker)
 	file := target + ".cli-bridger.json"
 	a := &App{}
 	loaded, err := a.Describe(target, "auto")

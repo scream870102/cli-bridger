@@ -1,5 +1,15 @@
 # CLI Bridger
 
+## Completed local fix: v1.2.0 release build failure (2026-10-08)
+
+Goal: fix the latest failed Release Windows workflow without weakening production discovery safeguards.
+Evidence: run 37750913226, tag v1.2.0, commit e8bc811; frontend passed, TestSidecarReloadAndSourceTransitions failed after 5.02s at native PowerShell discovery, matching the 5s discovery deadline. Previous release runs succeeded.
+Acceptance: remove test-only PowerShell startup dependency while preserving actual subprocess discovery/source-transition coverage; repeated regression tests and complete release build pass. Remote publishing remains outside this edit; no commit/push/tag changes.
+Implemented: use a copied native test executable with a guarded TestMain discovery response/marker. Script path tests, actual subprocess/source-transition assertions and production timeout remain unchanged.
+Verification: TestSidecarReloadAndSourceTransitions passed 20 consecutive runs; full build.ps1 passed (npm ci/Vite, all Go tests, demo executable, resources, production executable). git diff --check passed. Test script: .cache/verify-ci-fix.ps1.
+Remaining release action: commit/push the fix and tag a new version (e.g. v1.2.1); not performed because repository instructions require explicit authorization for commit/push. Rerunning v1.2.0 alone still uses its original commit. Hosted CI success for the fix is not yet verified.
+Lesson: discovery tests with a strict production deadline should use a native helper subprocess instead of depending on Windows PowerShell cold-start latency on hosted runners.
+
 ## Completed task: persistent settings database and reset (2026-10-08)
 
 Goal: save settings in cli-bridger.db beside the app executable, restore on startup and reset in one click.
