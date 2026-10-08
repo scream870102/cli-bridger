@@ -1,5 +1,7 @@
 # CLI Bridger
 
+授權：[MIT License](LICENSE) · Copyright (c) 2026 scream870102
+
 以 Go + **Wails v3.0.0-beta.28** 製作的 Windows 桌面 App。CLI 回傳一份 JSON，App 便產生子命令導覽與參數表單。採用暗黑開發者工作台設計：石墨黑、青綠重點色、緊湊表單與終端。
 
 ## 試用
