@@ -5,15 +5,15 @@ import '@xterm/xterm/css/xterm.css';
 import './style.css';
 
 const $ = id => document.getElementById(id);
-const backend = Object.fromEntries(['Describe','PickPath','Preview','Run','Stop','Input','Resize'].map(name=>[name,(...args)=>Call.ByName(`main.App.${name}`,...args)]));
+const backend = Object.fromEntries(['Describe','Reload','PickPath','Preview','Run','Stop','Input','Resize'].map(name=>[name,(...args)=>Call.ByName(`main.App.${name}`,...args)]));
 const api = () => backend;
-const terminal = new Terminal({convertEol:false, fontFamily:'Cascadia Code, Consolas, monospace',fontSize:13,scrollback:5000,theme:{background:'#14171c',foreground:'#dfe8f5',cursor:'#69ddbb'}});
+const terminal = new Terminal({convertEol:false, fontFamily:'Cascadia Code, Consolas, monospace',fontSize:16,lineHeight:1.2,scrollback:5000,theme:{background:'#121212',foreground:'#f0f0f0',cursor:'#E28C91'}});
 const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open($('terminal')); fit.fit();
 let descriptor, path=[], values={}, enabled={}, running=false, revision=0;
 function error(e) { $('error').hidden=!e; $('error').textContent=e ? String(e) : ''; }
-function busy(value) { running=value; $('commands').inert=value||!descriptor; $('fields').disabled=value||!descriptor; $('run').disabled=value||!descriptor; $('stop').disabled=!value; for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=value; $('status').textContent=value?'執行中':descriptor?'已連接':'尚未連接'; }
+function busy(value) { running=value; $('commands').inert=value||!descriptor; $('fields').disabled=value||!descriptor; $('run').disabled=value||!descriptor; $('reload').disabled=value||!descriptor; $('stop').disabled=!value; for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=value; $('status').textContent=value?'執行中':descriptor?'已連接':'尚未連接'; }
 async function attempt(fn) { try { error(''); await fn(); } catch(e) {error(e);} }
-function invalidate() { descriptor=null;revision++;$('commands').replaceChildren();$('parameters').replaceChildren();$('raw').textContent='尚未載入';$('preview').textContent='請讀取工具規格';$('description').textContent='載入工具後，這裡會顯示指令與參數。';busy(false); }
+function invalidate() { descriptor=null;revision++;$('reload').hidden=true;$('commands').replaceChildren();$('parameters').replaceChildren();$('raw').textContent='尚未載入';$('preview').textContent='請讀取工具規格';$('description').textContent='載入工具後，這裡會顯示指令與參數。';busy(false); }
 function el(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
 function commandChain() { const list=[descriptor.root]; for(const id of path)list.push(list.at(-1).commands.find(c=>c.id===id)); return list; }
 function effective(p) { return Object.hasOwn(values,p.id)?values[p.id]:p.default; }
@@ -28,12 +28,13 @@ function activeParameters() {
 }
 async function preview() {
  const request=++revision;
- try { const args=await api().Preview(path,values,enabled); if(request!==revision)return; $('preview').textContent=args.map(a=>JSON.stringify(a)).join(' '); $('run').disabled=running; error(''); }
+ try { const args=await api().Preview(path,values,enabled); if(request!==revision)return; $('preview').textContent=args.map(a=>JSON.stringify(a)).join(' '); $('run').disabled=running; }
  catch(e) { if(request!==revision)return; $('preview').textContent=String(e); $('run').disabled=true; }
 }
 function render() {
  const commands=$('commands'), parameters=$('parameters'); commands.replaceChildren(); parameters.replaceChildren();
  const chain=commandChain(), active=activeParameters();
+ $('reload').hidden=!chain.some(c=>(c.parameters||[]).some(p=>p.env));
  chain.forEach((command,level)=>{
   if(command.commands?.length) {
    const row=el('div',undefined,'command-row'); row.append(el('span',level?'下一層子命令':'子命令','hint'));
@@ -45,13 +46,13 @@ function render() {
    const dep=p.dependsOn;
    if(dep&&(!active.has(dep.id)||effective(active.get(dep.id))!==dep.value))continue;
    const row=el('div',undefined,'parameter'), title=el('div',undefined,'parameter-title');
-   const label=el('label',p.name?`${p.name}${p.flag?` (${p.flag})`:''}`:p.flag||p.id); label.htmlFor=`value-${p.id}`;
+   const label=el('label',`${p.name||p.id}${p.env?` (ENV: ${p.env})`:p.flag?` (${p.flag})`:''}`); label.htmlFor=`value-${p.id}`;
    if(!p.required) {
     const toggle=el('input');toggle.type='checkbox';toggle.checked=enabled[p.id]===true;toggle.setAttribute('aria-label',`啟用 ${p.id}`);toggle.setAttribute('aria-describedby',`help-${p.id}`);
     toggle.onchange=()=>{enabled[p.id]=toggle.checked;if(toggle.checked&&p.type==='bool'&&effective(p)===undefined)values[p.id]=true;render();};title.append(toggle);
    }
    title.append(label,el('span',p.required?'必填':p.type,'badge'));row.append(title);
-   const help=el('p',p.description,'hint parameter-description');help.id=`help-${p.id}`;row.append(help);
+   const help=el('p',p.description+(p.env?'\n'+(p.required?'僅設定此子程序的環境變數。':'勾選後覆寫此子程序的環境；未勾選時繼承原值。'):''),'hint parameter-description');help.id=`help-${p.id}`;row.append(help);
    if(active.has(p.id)) {
     const controls=el('div',undefined,'controls'); let input;
     if(p.enum?.length) {input=el('select');input.append(new Option('請選擇',''));p.enum.forEach(v=>input.append(new Option(String(v),String(v))));}
@@ -92,6 +93,20 @@ $('load').onclick=()=>attempt(async()=>{
  finally{busy(false);}
 });
 $('run').onclick=()=>attempt(async()=>{busy(true);terminal.clear();try{await api().Run(path,values,enabled,terminal.cols,terminal.rows);terminal.focus();}catch(e){busy(false);throw e;}});
+$('reload').onclick=()=>attempt(async()=>{
+ // Freeze effective env defaults so reloading a dynamic descriptor keeps the applied value.
+ const previous=new Map(commandChain().flatMap(c=>c.parameters||[]).map(p=>[p.id,p]));
+ const retained={...values};for(const p of activeParameters().values())if(p.env&&effective(p)!==undefined)retained[p.id]=effective(p);
+ revision++;busy(true);$('stop').disabled=true;$('status').textContent='重讀規格中…';
+ try {
+  const result=await api().Reload(path,values,enabled);descriptor=result.descriptor;
+  let command=descriptor.root;const nextPath=[];
+  for(const id of path){const next=command.commands?.find(c=>c.id===id);if(!next)break;nextPath.push(id);command=next;}path=nextPath;
+  const nextValues={},nextEnabled={};
+  for(const c of commandChain())for(const p of c.parameters||[]){const old=previous.get(p.id);if(old&&old.type===p.type&&old.env===p.env&&old.flag===p.flag){if(Object.hasOwn(retained,p.id))nextValues[p.id]=retained[p.id];if(enabled[p.id]===true)nextEnabled[p.id]=true;}}
+  values=nextValues;enabled=nextEnabled;$('raw').textContent=result.raw;$('description').textContent=`${descriptor.name} — ${descriptor.description}`;
+ } finally {busy(false);render();}
+});
 $('stop').onclick=()=>attempt(()=>api().Stop());
 $('clear').onclick=()=>terminal.clear();
 terminal.onData(data=>{if(running)attempt(()=>api().Input(data));});

@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import sys
 import time
 
@@ -14,6 +15,9 @@ DESCRIPTOR = {
         "id": "root",
         "name": "",
         "description": "Choose render to demonstrate live terminal output from Python.",
+        "parameters": [{"id": "demoRoot", "name": "Demo root directory",
+                        "description": "Override BRIDGER_DEMO_ROOT for this child process; the demo prints it without accessing files.",
+                        "env": "BRIDGER_DEMO_ROOT", "type": "path", "pathKind": "directory", "default": "."}],
         "commands": [{
             "id": "render",
             "name": "render",
@@ -53,6 +57,7 @@ def main():
     if not 1 <= len(args.label) <= 80:
         parser.error("label must contain 1 to 80 characters")
     print(args.label, flush=True)
+    print("BRIDGER_DEMO_ROOT:", os.environ.get("BRIDGER_DEMO_ROOT", ""), flush=True)
     prefix, suffix = ("\033[36m", "\033[0m") if args.color else ("", "")
     for step in range(args.steps + 1):
         filled = 30 * step // args.steps

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/UserExistsError/conpty"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -54,15 +55,38 @@ func (a *App) Describe(target, runner string) (*Loaded, error) {
 	if err != nil {
 		return nil, err
 	}
+	return a.describe(path, prefix, nil)
+}
+
+// Reload applies only declared environment parameters, even before argv is complete.
+func (a *App) Reload(path []string, values map[string]any, enabled map[string]bool) (*Loaded, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.terminal != nil {
+		return nil, errors.New("stop the current command first")
+	}
+	if a.descriptor == nil {
+		return nil, errors.New("load a CLI description first")
+	}
+	env, err := protocol.BuildEnvironment(a.descriptor, path, values, enabled)
+	if err != nil {
+		return nil, err
+	}
+	return a.describe(a.executable, a.prefix, env)
+}
+
+// Caller holds mu. A failed reload leaves the previous description intact.
+func (a *App) describe(path string, prefix []string, environment map[string]string) (*Loaded, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, append(append([]string{}, prefix...), "--cli-bridger-describe")...)
+	cmd.Env = mergeEnvironment(os.Environ(), environment)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.WaitDelay = time.Second
 	var out, diagnostic boundedBuffer
 	cmd.Stdout = &out
 	cmd.Stderr = &diagnostic
-	if err = cmd.Run(); err != nil {
+	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("CLI description failed (requires --cli-bridger-describe): %w; %s", err, diagnostic.String())
 	}
 	d, err := protocol.Parse(out.Bytes())
@@ -110,12 +134,16 @@ func (a *App) Run(path []string, values map[string]any, enabled map[string]bool,
 	if err != nil {
 		return err
 	}
+	environment, err := protocol.BuildEnvironment(a.descriptor, path, values, enabled)
+	if err != nil {
+		return err
+	}
 	parts := append(append([]string{a.executable}, a.prefix...), args...)
 	for i := range parts {
 		parts[i] = syscall.EscapeArg(parts[i])
 	}
 	cols, rows = dimensions(cols, rows)
-	p, err := conpty.Start(strings.Join(parts, " "), conpty.ConPtyDimensions(cols, rows))
+	p, err := conpty.Start(strings.Join(parts, " "), conpty.ConPtyDimensions(cols, rows), conpty.ConPtyEnv(mergeEnvironment(os.Environ(), environment)))
 	if err != nil {
 		return err
 	}
@@ -154,6 +182,26 @@ func (a *App) Run(path []string, values map[string]any, enabled map[string]bool,
 		a.desktop.Event.Emit("terminal:exit", message)
 	}()
 	return nil
+}
+
+// Windows environment keys are case-insensitive. Preserve special =C: entries.
+// Only the child's block changes; the app and OS environment are untouched.
+func mergeEnvironment(base []string, overrides map[string]string) []string {
+	result := make([]string, 0, len(base)+len(overrides))
+	replaced := make(map[string]bool, len(overrides))
+	for key := range overrides {
+		replaced[strings.ToUpper(key)] = true
+	}
+	for _, entry := range base {
+		key, _, _ := strings.Cut(entry, "=")
+		if !replaced[strings.ToUpper(key)] {
+			result = append(result, entry)
+		}
+	}
+	for key, value := range overrides {
+		result = append(result, key+"="+value)
+	}
+	return result
 }
 func dimensions(cols, rows int) (int, int) { return max(2, min(cols, 500)), max(2, min(rows, 200)) }
 func (a *App) Input(data string) error {

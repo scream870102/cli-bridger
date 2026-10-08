@@ -167,6 +167,30 @@ your-cli.exe --cli-bridger-describe
 
 ## 終端與執行
 
+### 環境變數
+
+CLI 可在參數中使用 `env` 指定環境變數名稱，取代 `flag`。例如在 `media.cjs` 的根指令 `parameters` 加入：
+
+```json
+{
+  "id": "media-root",
+  "name": "素材根目錄",
+  "description": "設定原始錄影與封存成品的儲存位置。",
+  "env": "ZZZ_MEDIA_ROOT",
+  "type": "path",
+  "pathKind": "directory",
+  "required": false,
+  "default": "Z:/Video/zzz-lab",
+  "examples": ["D:/Media/zzz-lab"]
+}
+```
+
+讀取規格後，勾選該欄位並輸入路徑或按「選擇…」。執行時 Bridger 只覆寫此子程序的環境，不把值加入命令列，也不修改 Windows 或 Bridger 自身的環境。未勾選時繼承 Bridger 啟動時的環境；沒有繼承值則由工具自己的程式邏輯決定預設值。JSON 的 `default` 只在欄位啟用後套用，不會自動覆寫既有環境。
+
+第一次「讀取規格」使用繼承環境。若工具會根據環境回覆不同規格，設定後按「套用環境並重讀規格」；此操作只使用目前指令層級的有效環境欄位，不要求其他命令列必填欄位已填完。重讀後保留仍相容的欄位；停用環境欄位再重讀即可恢復繼承值。工具應能在尚未設定環境時回覆基本規格。工具宣告放在根指令時適用所有子命令，放在子命令時只適用該指令分支。
+
+`media.cjs` 使用的是 `ZZZ_MEDIA_ROOT`；需要 `ZZZ_SITE_ROOT` 的工具可另外宣告同型態欄位。外部工具需自行加入描述，目前 Bridger 不會猜測程式使用了哪些環境變數。Go/Python demo 的 `BRIDGER_DEMO_ROOT` 可用來安全測試這個流程，只顯示值、不操作檔案。
+
 使用 Windows ConPTY + xterm.js，支援 ANSI 顏色、游標移動、原地更新進度、鍵盤輸入、視窗尺寸同步及停止。輸出以原始位元組傳遞，避免中文 UTF-8 分段被破壞；stdout/stderr 合併為終端串流。
 
 執行前由 Go 重新驗證參數，直接啟動執行檔或選定的腳本執行器，不拼接 shell 指令。Discovery 與執行共用同一組執行器／腳本引數。預覽以引數邊界顯示，並非可直接貼入所有 shell 的指令字串。工作目錄繼承 App 啟動目錄。讀取格式也會執行工具，請選擇可信任的 CLI。

@@ -1,6 +1,14 @@
 # CLI Bridger
 
-## Current task: purpose descriptions (2026-10-08)
+## Completed task: dark panel redesign
+Goal: Spotify-inspired dark surfaces, distinct sections and parameter cards, accent #E28C91.
+Acceptance: readable 16px body; separated rounded sections/cards; pink selected/focus/action states; no overflow at 800px; actual desktop smoke and production build pass.
+Knowns: preserve current environment feature edits and behavior. Reuse CSS/DOM with no dependencies. Open questions: none.
+Verification: all acceptance criteria passed. Vite build and production Go build succeeded. Actual WebView smoke verified discovery, environment edit/reload/run, 16px body and 14px help. At 800px cards stack and toolbar wraps with no horizontal overflow. Inspected .cache/pink-preview.png and .cache/pink-narrow.png. Main workspace scrolls as a whole so parameter cards remain readable. Production binary rebuilt; no dependencies, commits or external repo edits.
+
+Latest completed task: environment parameters and larger typography; see "Environment parameters" below.
+
+## Completed task: purpose descriptions (2026-10-08)
 
 User requested purpose explanations for every command and parameter. Reuse description, require nonblank text for tool/root/commands/parameters, complete Go/Python demo responses and docs, and render visible help in sidebar/forms including disabled optional parameters. Preserve user's existing README manual build edits.
 
@@ -41,3 +49,18 @@ Lessons worth retaining:
 - Windows App Execution Aliases are valid executables but may be nonregular reparse points; executable validation must not reject them solely by IsRegular. Script targets still require regular files.
 - Custom powershell.exe/pwsh.exe needs explicit -File just like the built-in runner; shell-style command parsing would invalidate literal argv assumptions.
 - Disabling only Load during discovery allows stale tool responses to overwrite newer selections; lock the complete target/runner selection while the handshake is pending.
+## Environment parameters (current task)
+
+Goal: add declared env parameters to Bridger using existing typed fields; child-only overrides.
+Knowns: initial handshake inherits app environment; ZZZ_MEDIA_ROOT belongs to media.cjs, ZZZ_SITE_ROOT to other tools. External repository stays unchanged.
+Open questions: none; implement explicit environment-aware reload for dynamic descriptors.
+Scope update: user requested larger, more legible text; raise body/terminal to 16px, help to 14–15px, improve muted contrast and narrow-window wrapping. Verify desktop rendering at 1200px and 800px widths.
+Acceptance:
+- [x] Schema validates env bindings and keeps them out of argv; defaults/dependencies/types work.
+- [x] UI identifies env fields and supports path picker and environment-aware reload.
+- [x] Discovery reload and ConPTY execution receive overrides; disabling inherits; parent unchanged.
+- [x] Docs/examples updated, tests/build and independent review pass.
+
+Verification: go test ./... passed, including actual discovery reload and ConPTY environment tests. Vite build passed; rebuilt production App and Go demo. Actual diagnostic WebView loaded Python demo, enabled a Chinese path with spaces, reloaded keeping the value, ran successfully with that environment visible in terminal and absent from argv, then disabled/reloaded. At 800px the controls stack with no horizontal overflow; screenshots .cache/env-preview.png and .cache/env-narrow.png inspected. Body/terminal 16px; help 14–15px. Independent review passed after fixing successful argument preview clearing unrelated reload errors. External zzz-lab-tools unchanged; CLI authors must add env declarations. No commits/pushes. No outstanding required work.
+
+Build lesson: frontend/dist is embedded by Go; complete Vite build before Go compilation/tests rather than running them concurrently (asset replacement invalidates embed inputs).

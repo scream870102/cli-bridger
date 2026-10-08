@@ -93,3 +93,86 @@ func TestDescriptionsRequired(t *testing.T) {
 		}
 	}
 }
+
+func TestEnvironmentBindings(t *testing.T) {
+	d, err := Parse([]byte(sample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Root.Parameters = append(d.Root.Parameters,
+		Parameter{ID: "media", Description: "Media directory", Env: "ZZZ_MEDIA_ROOT", Type: "path", PathKind: "directory", Default: "."},
+		Parameter{ID: "debug", Description: "Debug environment", Env: "APP_DEBUG", Type: "bool", Default: false, DependsOn: &Dependency{ID: "verbose", Value: true}},
+	)
+	tests := []struct {
+		name    string
+		values  map[string]any
+		enabled map[string]bool
+		want    map[string]string
+		bad     string
+	}{
+		{"disabled inherits", nil, nil, map[string]string{}, ""},
+		{"enabled default", nil, map[string]bool{"media": true}, map[string]string{"ZZZ_MEDIA_ROOT": "."}, ""},
+		{"literal env text", map[string]any{"media": "-path with spaces;literal"}, map[string]bool{"media": true}, map[string]string{"ZZZ_MEDIA_ROOT": "-path with spaces;literal"}, ""},
+		{"bad path", map[string]any{"media": " "}, map[string]bool{"media": true}, nil, "media"},
+		{"NUL", map[string]any{"media": "a\x00b"}, map[string]bool{"media": true}, nil, "NUL"},
+		{"inactive dependency", nil, map[string]bool{"debug": true}, map[string]string{}, ""},
+		{"false bool", map[string]any{"verbose": true}, map[string]bool{"verbose": true, "debug": true}, map[string]string{"APP_DEBUG": "false"}, ""},
+		{"true bool", map[string]any{"verbose": true, "debug": true}, map[string]bool{"verbose": true, "debug": true}, map[string]string{"APP_DEBUG": "true"}, ""},
+		{"invalid parent", map[string]any{"verbose": "true"}, map[string]bool{"verbose": true, "debug": true}, nil, "verbose"},
+		{"disabled env ignores parent", map[string]any{"verbose": "invalid"}, map[string]bool{"verbose": true}, map[string]string{}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// The required positional input is intentionally absent on every reload.
+			got, err := BuildEnvironment(d, []string{"run"}, tt.values, tt.enabled)
+			if tt.bad != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.bad) {
+					t.Fatalf("wanted %s, got %v", tt.bad, err)
+				}
+				return
+			}
+			if err != nil || !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %#v %v; want %#v", got, err, tt.want)
+			}
+		})
+	}
+	args, err := BuildArgs(d, []string{"run"}, map[string]any{"input": "file", "media": "root"}, map[string]bool{"media": true})
+	if err != nil || !reflect.DeepEqual(args, []string{"run", "--count=3", "file"}) {
+		t.Fatalf("env leaked into argv: %q %v", args, err)
+	}
+	if _, err := BuildArgs(d, []string{"run"}, map[string]any{"input": "file", "media": ""}, map[string]bool{"media": true}); err == nil {
+		t.Fatal("argv builder did not validate env")
+	}
+	d.Root.Parameters[1].Required = true
+	d.Root.Parameters[1].Default = nil
+	if _, err := BuildEnvironment(d, []string{"run"}, nil, nil); err == nil || !strings.Contains(err.Error(), "media") {
+		t.Fatalf("missing required env accepted: %v", err)
+	}
+	got, err := BuildEnvironment(d, []string{"run"}, map[string]any{"media": "."}, nil)
+	if err != nil || got["ZZZ_MEDIA_ROOT"] != "." {
+		t.Fatalf("required env not enabled: %v %v", got, err)
+	}
+}
+
+func TestInvalidEnvironmentSchema(t *testing.T) {
+	for _, name := range []string{"1ROOT", "ROOT-NAME", "ROOT=BAD", "ROOT\x00BAD"} {
+		d, _ := Parse([]byte(sample))
+		d.Root.Parameters = append(d.Root.Parameters, Parameter{ID: "env", Description: "Environment", Env: name, Type: "string"})
+		data, _ := json.Marshal(d)
+		if _, err := Parse(data); err == nil {
+			t.Errorf("accepted invalid env name %q", name)
+		}
+	}
+	d, _ := Parse([]byte(sample))
+	d.Root.Parameters[0].Env = "APP_VERBOSE"
+	data, _ := json.Marshal(d)
+	if _, err := Parse(data); err == nil {
+		t.Fatal("accepted flag and env together")
+	}
+	d.Root.Parameters[0].Flag = ""
+	d.Root.Commands[0].Parameters = append(d.Root.Commands[0].Parameters, Parameter{ID: "duplicate", Description: "Duplicate inherited binding", Env: "app_verbose", Type: "bool"})
+	data, _ = json.Marshal(d)
+	if _, err := Parse(data); err == nil {
+		t.Fatal("accepted inherited case-insensitive duplicate env")
+	}
+}

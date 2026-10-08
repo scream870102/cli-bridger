@@ -31,6 +31,7 @@ type Parameter struct {
 	Name        string      `json:"name,omitempty"`
 	Description string      `json:"description"`
 	Flag        string      `json:"flag,omitempty"`
+	Env         string      `json:"env,omitempty"`
 	Type        string      `json:"type"`
 	Required    bool        `json:"required,omitempty"`
 	Default     any         `json:"default,omitempty"`
@@ -53,6 +54,7 @@ type Dependency struct {
 
 var identifier = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]*$`)
 var flagName = regexp.MustCompile(`^--?[A-Za-z][A-Za-z0-9-]*$`)
+var environmentName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func Parse(data []byte) (*Descriptor, error) {
 	var d Descriptor
@@ -92,10 +94,14 @@ func (d *Descriptor) validate() error {
 		}
 		scope := map[string]Parameter{}
 		flags := map[string]bool{}
+		environment := map[string]bool{}
 		for k, v := range inherited {
 			scope[k] = v
 			if v.Flag != "" {
 				flags[v.Flag] = true
+			}
+			if v.Env != "" {
+				environment[strings.ToUpper(v.Env)] = true
 			}
 		}
 		optionalPositional := false
@@ -112,7 +118,13 @@ func (d *Descriptor) validate() error {
 			default:
 				return fmt.Errorf("%s: unsupported type", p.ID)
 			}
-			if p.Flag != "" {
+			if p.Env != "" {
+				key := strings.ToUpper(p.Env)
+				if p.Flag != "" || !environmentName.MatchString(p.Env) || environment[key] {
+					return fmt.Errorf("%s: invalid or duplicate env binding, or combined flag and env", p.ID)
+				}
+				environment[key] = true
+			} else if p.Flag != "" {
 				if !flagName.MatchString(p.Flag) || flags[p.Flag] {
 					return fmt.Errorf("%s: invalid or duplicate flag", p.ID)
 				}
@@ -188,7 +200,7 @@ func valueString(p Parameter, v any) (string, error) {
 		if p.Type == "path" && strings.TrimSpace(s) == "" {
 			return "", fmt.Errorf("%s requires a path", p.ID)
 		}
-		if p.Flag == "" && strings.HasPrefix(s, "-") {
+		if p.Flag == "" && p.Env == "" && strings.HasPrefix(s, "-") {
 			return "", fmt.Errorf("%s positional cannot start with '-'", p.ID)
 		}
 		if l := p.Limits; l != nil {
@@ -253,8 +265,20 @@ func valueString(p Parameter, v any) (string, error) {
 
 // BuildArgs returns an argv slice, never a shell command. commandPath contains command IDs.
 func BuildArgs(d *Descriptor, commandPath []string, values map[string]any, enabled map[string]bool) ([]string, error) {
+	args, _, err := build(d, commandPath, values, enabled, false)
+	return args, err
+}
+
+// BuildEnvironment returns only active overrides. Unrelated argv parameters do
+// not need values, allowing discovery reload before the command form is complete.
+func BuildEnvironment(d *Descriptor, commandPath []string, values map[string]any, enabled map[string]bool) (map[string]string, error) {
+	_, environment, err := build(d, commandPath, values, enabled, true)
+	return environment, err
+}
+
+func build(d *Descriptor, commandPath []string, values map[string]any, enabled map[string]bool, envOnly bool) ([]string, map[string]string, error) {
 	if err := d.validate(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	chain := []Command{d.Root}
 	current := d.Root
@@ -269,19 +293,45 @@ func BuildArgs(d *Descriptor, commandPath []string, values map[string]any, enabl
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("unknown command %q", id)
+			return nil, nil, fmt.Errorf("unknown command %q", id)
 		}
 	}
 	var args []string
 	active := map[string]string{}
 	params := map[string]Parameter{}
+	for _, c := range chain {
+		for _, p := range c.Parameters {
+			params[p.ID] = p
+		}
+	}
+	needed := map[string]bool{}
+	var need func(Parameter)
+	need = func(p Parameter) {
+		if needed[p.ID] {
+			return
+		}
+		needed[p.ID] = true
+		if p.DependsOn != nil && (p.Required || enabled[p.ID]) {
+			need(params[p.DependsOn.ID])
+		}
+	}
+	if envOnly {
+		for _, p := range params {
+			if p.Env != "" {
+				need(p)
+			}
+		}
+	}
+	environment := map[string]string{}
 	for index, c := range chain {
 		if index > 0 {
 			args = append(args, c.Name)
 		}
 		missingPositional := false
 		for _, p := range c.Parameters {
-			params[p.ID] = p
+			if envOnly && !needed[p.ID] {
+				continue
+			}
 			isActive := p.Required || enabled[p.ID]
 			if dep := p.DependsOn; dep != nil {
 				actual, ok := active[dep.ID]
@@ -289,7 +339,7 @@ func BuildArgs(d *Descriptor, commandPath []string, values map[string]any, enabl
 				isActive = isActive && ok && actual == expected
 			}
 			if !isActive {
-				if p.Flag == "" {
+				if p.Flag == "" && p.Env == "" {
 					missingPositional = true
 				}
 				continue
@@ -299,13 +349,20 @@ func BuildArgs(d *Descriptor, commandPath []string, values map[string]any, enabl
 				v = p.Default
 			}
 			if v == nil {
-				return nil, fmt.Errorf("%s requires a value", p.ID)
+				return nil, nil, fmt.Errorf("%s requires a value", p.ID)
 			}
 			s, err := valueString(p, v)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			active[p.ID] = s
+			if p.Env != "" {
+				environment[p.Env] = s
+				continue
+			}
+			if envOnly {
+				continue
+			}
 			if p.Type == "bool" {
 				if s == "true" {
 					args = append(args, p.Flag)
@@ -316,11 +373,11 @@ func BuildArgs(d *Descriptor, commandPath []string, values map[string]any, enabl
 				args = append(args, p.Flag+"="+s)
 			} else {
 				if missingPositional {
-					return nil, fmt.Errorf("%s requires preceding positional parameters", p.ID)
+					return nil, nil, fmt.Errorf("%s requires preceding positional parameters", p.ID)
 				}
 				args = append(args, s)
 			}
 		}
 	}
-	return args, nil
+	return args, environment, nil
 }

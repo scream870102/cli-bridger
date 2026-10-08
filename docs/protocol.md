@@ -46,7 +46,8 @@ Migration: this version 1 prototype previously allowed omitted descriptions. Exi
 | `id` | Required, globally unique across commands and parameters |
 | `name` | Optional display label |
 | `description` | Required nonblank plain-text explanation of what the parameter controls |
-| `flag` | Option spelling, e.g. `--count` or `-n`; absent/empty means positional |
+| `flag` | Option spelling, e.g. `--count` or `-n`; absent/empty with no `env` means positional |
+| `env` | Environment-variable binding, e.g. `ZZZ_MEDIA_ROOT`; mutually exclusive with `flag` |
 | `type` | Required: `string`, `int`, `float`, `path`, or `bool` |
 | `required` | Defaults to false; true activates automatically when dependencies match |
 | `default` | Typed initial value used when active input is absent; null means no default |
@@ -61,6 +62,26 @@ Numeric limits only apply to int/float; length limits only apply to string/path.
 Dependencies reference earlier parameters in the same command or any ancestor. This ordering prevents cycles and makes activation deterministic. If a dependency is inactive or does not match, its dependent is omitted even when required or holding stale input. Optional parameters require explicit activation; a default alone does not enable them. A boolean emits its flag only for true; false emits nothing. Version 1 does not represent a separate negated flag, repeated option, variadic positional, or multiple dependency expression.
 
 ## Argument ordering and execution
+
+Environment parameters reuse the same types, limits, defaults, examples, path pickers, and dependency rules. For example, a root parameter can declare:
+
+```json
+{
+  "id": "mediaRoot",
+  "name": "Media directory",
+  "description": "Root directory used by the tool to locate media files",
+  "env": "ZZZ_MEDIA_ROOT",
+  "type": "path",
+  "pathKind": "directory",
+  "default": "."
+}
+```
+
+Environment names must match `[A-Za-z_][A-Za-z0-9_]*`. Names must be unique within a command and its ancestors, compared case-insensitively for Windows compatibility. An environment binding cannot also have a flag and never emits an argv token. NUL characters are rejected; boolean environment values serialize as `true` or `false` (including false, which still overrides the variable).
+
+An optional environment parameter only overrides the child process environment when explicitly enabled; when disabled it inherits the application's environment even if a default or previous input exists. Required environment parameters activate automatically. Inactive dependencies omit the override. Defaults apply only to active parameters. Overrides do not modify the user's system environment or shell configuration.
+
+Initial discovery inherits the application's environment. After loading the schema, an explicit reload can apply selected overrides when invoking `--cli-bridger-describe` again. `BuildEnvironment` validates active environment values and their dependency parents without requiring unrelated argv fields to be complete. `BuildArgs` validates all active parameters, including environment parameters, but returns only command-line arguments. The caller must apply the returned environment overrides separately to the child process for discovery or execution.
 
 Arguments follow descriptor order: root parameters, selected command name and its parameters, then each nested command. Flags with values use `--flag=value` (or `-n=value`), so participating CLIs must accept equals syntax. Boolean flags use `--flag`. Positionals retain parameter order. Positionals are permitted only on leaf commands; required positionals cannot follow optional ones, and activation cannot leave gaps. Positional text/path values beginning with `-` are rejected to prevent option injection; use an explicit relative path such as `./-filename`.
 
