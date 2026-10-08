@@ -4,6 +4,36 @@
 
 以 Go + **Wails v3.0.0-beta.28** 製作的 Windows 桌面 App。CLI 回傳一份 JSON，App 便產生子命令導覽與參數表單。採用暗黑開發者工作台設計：石墨黑、青綠重點色、緊湊表單與終端。
 
+## 下載與安裝
+
+到此 GitHub repository 的 **Releases** 頁面，下載 `CLI-Bridger-<版本>-windows-x64-setup.exe`，依精靈安裝後從開始功能表開啟。安裝在目前使用者的 `%LOCALAPPDATA%\Programs\CLI Bridger`，可從 Windows「已安裝的應用程式」解除安裝。
+
+若缺少 WebView2 Runtime，安裝包會自動執行 Microsoft bootstrapper，需要網路連線；失敗時會顯示訊息並允許重試。也可下載 `*-portable.zip` 解壓縮後執行 `cli-bridger.exe`，但需自行備妥 [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)。兩種套件都包含 `demo-cli.exe`、README 與 MIT 授權。
+
+目前發佈 Windows x64 版本，安裝包與程式尚未進行程式碼簽章。`SHA256SUMS.txt` 提供下載檔案的 SHA-256 校驗值。
+
+## 自動發佈版本
+
+將 `.github/workflows/release.yml` 與打包檔案合併到 GitHub 後，在要發佈的 commit 建立並推送版本 tag：
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions 會執行完整前端建置、Go 測試、Windows exe 編譯，再產生 Inno Setup 安裝包、免安裝 ZIP 與校驗檔，全部上傳到該 tag 的 GitHub Release。使用內建 `GITHUB_TOKEN` 與 workflow 的 `contents: write` 權限，不需要另外設定 PAT；repository 必須允許執行 GitHub Actions。
+
+Tag 格式為 `v主版.次版.修訂版`，例如 `v1.2.3`；可加預發佈後綴，如 `v1.2.3-beta.1`，這類 Release 會標示為 prerelease，且不取代 Latest。三段數字各不得超過 65535。正式 Release 的附件不會自動覆蓋：發佈後有修改請使用新 tag；建置失敗且尚未建立 Release 時可重跑 workflow。若發佈中斷而留下 draft，先到 Releases 檢查並處理該 draft 再重跑。
+
+本機打包需先安裝 [Inno Setup 6](https://jrsoftware.org/isinfo.php)，再執行：
+
+```powershell
+./build.ps1
+./build/windows/package.ps1 -Tag v1.0.0
+```
+
+產物位於 `build/bin/release/v1.0.0/`。Inno Setup 不在預設路徑時，可用 `-Compiler '路徑/ISCC.exe'` 指定。打包不會推送 tag 或發佈 Release。
+
 ## 試用
 
 1. 開啟 `build/bin/cli-bridger.exe`。
@@ -192,6 +222,10 @@ CLI 可在參數中使用 `env` 指定環境變數名稱，取代 `flag`。例�
 `media.cjs` 使用的是 `ZZZ_MEDIA_ROOT`；需要 `ZZZ_SITE_ROOT` 的工具可另外宣告同型態欄位。外部工具需自行加入描述，目前 Bridger 不會猜測程式使用了哪些環境變數。Go/Python demo 的 `BRIDGER_DEMO_ROOT` 可用來安全測試這個流程，只顯示值、不操作檔案。
 
 使用 Windows ConPTY + xterm.js，支援 ANSI 顏色、游標移動、原地更新進度、鍵盤輸入、視窗尺寸同步及停止。輸出以原始位元組傳遞，避免中文 UTF-8 分段被破壞；stdout/stderr 合併為終端串流。
+
+指令等待確認時，點擊終端輸入 `y` 並按 Enter，或使用下方「回覆指令」欄位送出。欄位留空可直接送出 Enter，支援同一程序連續多次提示。
+
+拖曳選取文字後可按「複製選取」或 Ctrl+C；沒有選取文字時，Ctrl+C 仍會送往程序以中斷執行。「複製全部」會複製目前保留的終端文字（含最多 5,000 行捲動記錄），適合貼上除錯；這不是完整的歷史紀錄檔。
 
 執行前由 Go 重新驗證參數，直接啟動執行檔或選定的腳本執行器，不拼接 shell 指令。Discovery 與執行共用同一組執行器／腳本引數。預覽以引數邊界顯示，並非可直接貼入所有 shell 的指令字串。工作目錄繼承 App 啟動目錄。讀取格式也會執行工具，請選擇可信任的 CLI。
 

@@ -110,11 +110,14 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 #run span { margin-left: 12px; color: #211315; }
 
 .terminal-section { padding: 20px 24px; }
-.terminal-section .section-heading { margin-bottom: 10px; }
+.terminal-section .section-heading { margin-bottom: 10px; flex-wrap: wrap; }
 .terminal-section h2 { color: #E28C91; }
 .quiet { min-height: 27px; padding: 3px 8px; background: transparent; border-color: #505050; color: #eeeeee; font-size: 14px; }
 #terminal { height: 240px; min-height: 240px; }
 #terminal .xterm { height: 100%; }
+#terminal-input-form { margin-top: 14px; }
+#terminal-input { flex: 1; min-width: 120px; }
+#copy-status { display: block; min-height: 1.5em; margin-top: 6px; }
 .raw-section { padding: 14px 24px; background: #121212; }
 summary { color: #eeeeee; cursor: pointer; font-size: 14px; line-height: 1.5; }
 summary span { margin-left: 12px; color: #bdbdbd; font: 13px var(--mono); }

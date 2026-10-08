@@ -38,8 +38,11 @@
         <div class="toolbar actions"><span class="hint">執行前會再次檢查所有參數。</span><button id="stop" disabled>停止</button><button id="run" class="primary" disabled>執行指令 <span aria-hidden="true">↵</span></button></div>
       </section>
       <section class="terminal-section" aria-labelledby="terminal-heading">
-        <div class="section-heading"><h2 id="terminal-heading">OUTPUT <span>終端輸出</span></h2><button id="clear" class="quiet">清除畫面</button></div>
+        <div class="section-heading"><h2 id="terminal-heading">OUTPUT <span>終端輸出</span></h2><div class="toolbar"><button id="copy-selection" class="quiet" disabled>複製選取</button><button id="copy-output" class="quiet">複製全部</button><button id="clear" class="quiet">清除畫面</button></div></div>
+        <p class="hint">點擊終端即可輸入、按 Enter 回覆；也可使用下方輸入欄。選取文字後 Ctrl+C 複製，未選取時 Ctrl+C 中斷指令。複製全部包含目前保留的輸出（最多 5,000 行捲動記錄）。</p>
         <div id="terminal" aria-label="互動終端"></div>
+        <form id="terminal-input-form" class="toolbar"><label for="terminal-input">回覆指令</label><input id="terminal-input" type="text" placeholder="例如 y，再按 Enter" autocomplete="off" disabled><button id="send-input" type="submit" disabled>送出 Enter</button></form>
+        <span id="copy-status" class="hint" role="status"></span>
       </section>
       <details class="raw-section"><summary>CLI 原始格式說明 <span>JSON</span></summary><pre id="raw">尚未載入</pre></details>
     </div>

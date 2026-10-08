@@ -18,6 +18,21 @@ func TestPTYHelper(t *testing.T) {
 		return
 	}
 	switch os.Args[len(os.Args)-1] {
+	case "interactive":
+		fmt.Print("CONFIRM-PROMPT [y/n]: ")
+		var answer string
+		fmt.Scanln(&answer)
+		if answer != "y" {
+			os.Exit(2)
+		}
+		fmt.Print("CONTINUE-PROMPT [Enter]: ")
+		answer = ""
+		fmt.Scanln(&answer)
+		if answer != "" {
+			os.Exit(3)
+		}
+		fmt.Print("INTERACTION-COMPLETE\r\n")
+		os.Exit(0)
 	case "burst":
 		for i := 0; i < 4096; i++ {
 			fmt.Printf("TOKEN-%04d payload-abcdefghijklmnopqrstuv\r\n", i)
@@ -35,6 +50,64 @@ func TestPTYHelper(t *testing.T) {
 	fmt.Scanln(&input)
 	fmt.Printf("\rprogress 100%% %s\r\n", input)
 	os.Exit(0)
+}
+
+func TestAppInputMultiplePrompts(t *testing.T) {
+	p := startPTYHelper(t, "interactive")
+	closed := false
+	defer func() {
+		if !closed {
+			_ = p.Close()
+		}
+	}()
+	app := &App{terminal: p}
+	chunks := make(chan string, 128)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		buf := make([]byte, 8192)
+		for {
+			n, err := p.Read(buf)
+			if n > 0 {
+				chunks <- string(buf[:n])
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	var output strings.Builder
+	await := func(marker string) {
+		t.Helper()
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		for !strings.Contains(output.String(), marker) {
+			select {
+			case chunk := <-chunks:
+				output.WriteString(chunk)
+			case <-timer.C:
+				t.Fatalf("missing %s: %q", marker, output.String())
+			}
+		}
+	}
+	await("CONFIRM-PROMPT")
+	if err := app.Input("y\r"); err != nil {
+		t.Fatal(err)
+	}
+	await("CONTINUE-PROMPT")
+	if err := app.Input("\r"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	code, err := p.Wait(ctx)
+	closed = true
+	_ = p.Close()
+	awaitPTYReader(t, done)
+	await("INTERACTION-COMPLETE")
+	if err != nil || code != 0 {
+		t.Fatalf("exit=%d err=%v", code, err)
+	}
 }
 
 func TestConPTYFinalBurst(t *testing.T) {

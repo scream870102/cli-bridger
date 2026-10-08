@@ -1,5 +1,28 @@
 # CLI Bridger
 
+## Completed task: GitHub tag releases (2026-10-08)
+
+Goal: pushing a version tag builds the Windows app and installer and publishes downloadable GitHub Release assets.
+Acceptance: tag-triggered workflow; tested production build; compiled installer and portable ZIP/checksums; WebView2 handling; documented tag/release process; independent review.
+Knowns: reuse build.ps1, Wails bootstrapper and runner-provided Inno Setup; x64 only, per-user installer. No actual tag push or GitHub publication authorized in this task.
+Open questions: none.
+- [x] Added v* tag workflow using official setup actions, build.ps1, per-user Inno installer, portable ZIP and SHA256SUMS; prerelease suffixes do not replace Latest.
+- [x] Full build.ps1 passed (npm ci/Vite, Go tests, demo, Windows resources and production app).
+- [x] Compiled v1.2.3-beta.1 installer with official Inno Setup 6.7.1 in project-local portable mode; verified ZIP contents, checksum values and rejection of invalid/oversized versions. Actionlint v1.7.12 passed.
+- [x] Documented installation/tag publishing/local packaging and reviewed workflow/installer independently.
+Verification scripts: .cache/prepare-inno.ps1 and .cache/check-release.ps1. Sample packages: build/bin/release/v1.2.3-beta.1/. This is a local test version, not a published release. GitHub workflow adds actual install/uninstall smoke checks before publishing; those hosted-runner checks and Release upload remain unexecuted until a tag is pushed. Local app installation and missing-WebView2 installation were not run (no user registry/runtime changes). No commit, push, tag or remote release performed.
+
+## Completed task: interactive input and copying output (2026-10-08)
+
+Goal: continue running commands with replies such as y + Enter, and copy output for debugging.
+Acceptance: multi-prompt real PTY interaction; explicit input form and terminal keyboard; selection/all-output clipboard with Ctrl+C preserving interrupt when unselected; production build and independent review.
+Knowns: existing ConPTY Input/onData already provide interactive transport; reuse xterm selection/buffer and browser clipboard. No new dependencies. Copy all is limited to retained terminal buffer (5,000 scrollback lines).
+Open questions: none.
+- [x] Added explicit reply form; blank Enter and successive prompts verified through App.Input and actual WebView.
+- [x] Selection/all-output clipboard buttons and Ctrl+C behavior verified in actual WebView; OS clipboard confirmed Chinese output and line breaks.
+- [x] Go tests, Vite build, production binary build and independent review passed. 800px layout had no horizontal overflow.
+Verification artifacts: .cache/terminal-smoke.mjs, .cache/terminal-keys.mjs, .cache/terminal-preview.png. Regression test: TestAppInputMultiplePrompts. Independent review found stale queued input crossing runs; fixed with generation invalidation and verified by executing the actual queue function. Production binary: build/bin/cli-bridger.exe. Diagnostic browser port exists only in an ignored test overlay; no production debug port, dependencies or commits added. No required work remains.
+
 ## Completed task: dark panel redesign
 Goal: Spotify-inspired dark surfaces, distinct sections and parameter cards, accent #E28C91.
 Acceptance: readable 16px body; separated rounded sections/cards; pink selected/focus/action states; no overflow at 800px; actual desktop smoke and production build pass.

@@ -9,9 +9,9 @@ const backend = Object.fromEntries(['Describe','Reload','PickPath','Preview','Ru
 const api = () => backend;
 const terminal = new Terminal({convertEol:false, fontFamily:'Cascadia Code, Consolas, monospace',fontSize:16,lineHeight:1.2,scrollback:5000,theme:{background:'#121212',foreground:'#f0f0f0',cursor:'#E28C91'}});
 const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open($('terminal')); fit.fit();
-let descriptor, path=[], values={}, enabled={}, running=false, revision=0;
+let descriptor, path=[], values={}, enabled={}, running=false, revision=0, inputGeneration=0;
 function error(e) { $('error').hidden=!e; $('error').textContent=e ? String(e) : ''; }
-function busy(value) { running=value; $('commands').inert=value||!descriptor; $('fields').disabled=value||!descriptor; $('run').disabled=value||!descriptor; $('reload').disabled=value||!descriptor; $('stop').disabled=!value; for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=value; $('status').textContent=value?'執行中':descriptor?'已連接':'尚未連接'; }
+function busy(value) { running=value; inputGeneration++; $('terminal-input').disabled=true; $('send-input').disabled=true; $('commands').inert=value||!descriptor; $('fields').disabled=value||!descriptor; $('run').disabled=value||!descriptor; $('reload').disabled=value||!descriptor; $('stop').disabled=!value; for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=value; $('status').textContent=value?'執行中':descriptor?'已連接':'尚未連接'; }
 async function attempt(fn) { try { error(''); await fn(); } catch(e) {error(e);} }
 function invalidate() { descriptor=null;revision++;$('reload').hidden=true;$('commands').replaceChildren();$('parameters').replaceChildren();$('raw').textContent='尚未載入';$('preview').textContent='請讀取工具規格';$('description').textContent='載入工具後，這裡會顯示指令與參數。';busy(false); }
 function el(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
@@ -92,7 +92,7 @@ $('load').onclick=()=>attempt(async()=>{
  try {const runner=$('runner').value==='custom'?$('custom-runner').value:$('runner').value;if(!runner.trim())throw Error('請指定執行器路徑');const result=await api().Describe($('executable').value,runner);descriptor=result.descriptor;path=[];values={};enabled={};$('executable').value=result.target;$('description').textContent=`${descriptor.name} — ${descriptor.description||''}`;$('raw').textContent=result.raw;render();}
  finally{busy(false);}
 });
-$('run').onclick=()=>attempt(async()=>{busy(true);terminal.clear();try{await api().Run(path,values,enabled,terminal.cols,terminal.rows);terminal.focus();}catch(e){busy(false);throw e;}});
+$('run').onclick=()=>attempt(async()=>{busy(true);terminal.clear();$('copy-status').textContent='';$('terminal-input').value='';try{await api().Run(path,values,enabled,terminal.cols,terminal.rows);$('terminal-input').disabled=!running;$('send-input').disabled=!running;terminal.focus();}catch(e){busy(false);throw e;}});
 $('reload').onclick=()=>attempt(async()=>{
  // Freeze effective env defaults so reloading a dynamic descriptor keeps the applied value.
  const previous=new Map(commandChain().flatMap(c=>c.parameters||[]).map(p=>[p.id,p]));
@@ -107,9 +107,49 @@ $('reload').onclick=()=>attempt(async()=>{
   values=nextValues;enabled=nextEnabled;$('raw').textContent=result.raw;$('description').textContent=`${descriptor.name} — ${descriptor.description}`;
  } finally {busy(false);render();}
 });
-$('stop').onclick=()=>attempt(()=>api().Stop());
+$('stop').onclick=()=>attempt(()=>{inputGeneration++;$('terminal-input').disabled=true;$('send-input').disabled=true;return api().Stop();});
 $('clear').onclick=()=>terminal.clear();
-terminal.onData(data=>{if(running)attempt(()=>api().Input(data));});
+let inputQueue=Promise.resolve();
+function sendInput(data) {
+ if(!running||$('send-input').disabled)return Promise.resolve();
+ const generation=inputGeneration;
+ const sent=inputQueue.then(()=>{if(running&&generation===inputGeneration)return api().Input(data);});
+ inputQueue=sent.catch(error);
+ return sent;
+}
+$('terminal-input-form').onsubmit=event=>{
+ event.preventDefault();
+ if(!running)return;
+ const input=$('terminal-input'), text=input.value;
+ input.value='';
+ attempt(()=>sendInput(text+'\r'));
+ input.focus();
+};
+terminal.onData(data=>{sendInput(data).catch(error);});
+terminal.onSelectionChange(()=>{$('copy-selection').disabled=!terminal.hasSelection();});
+async function copyOutput(selectedOnly=false) {
+ let text=terminal.getSelection();
+ if(!selectedOnly) {
+  const buffer=terminal.buffer.active, lines=[];
+  for(let i=0;i<buffer.length;i++) {
+   const line=buffer.getLine(i), next=buffer.getLine(i+1);
+   lines.push(line.translateToString(!next?.isWrapped)+(next?.isWrapped?'':'\n'));
+  }
+  text=lines.join('').replace(/\n+$/,'');
+ }
+ if(!text){$('copy-status').textContent='沒有可複製的內容';return;}
+ await navigator.clipboard.writeText(text);
+ $('copy-status').textContent=selectedOnly?'已複製選取文字':'已複製保留的終端輸出';
+}
+$('copy-selection').onclick=()=>attempt(()=>copyOutput(true));
+$('copy-output').onclick=()=>attempt(()=>copyOutput());
+terminal.attachCustomKeyEventHandler(event=>{
+ if(event.ctrlKey&&!event.altKey&&event.key.toLowerCase()==='c'&&(event.shiftKey||terminal.hasSelection())) {
+  if(event.type==='keydown'){event.preventDefault();attempt(()=>copyOutput(terminal.hasSelection()));}
+  return false;
+ }
+ return true;
+});
 new ResizeObserver(()=>{fit.fit();if(running)api().Resize(terminal.cols,terminal.rows).catch(error);}).observe($('terminal'));
 Events.On('terminal:data',event=>terminal.write(Uint8Array.from(atob(event.data),c=>c.charCodeAt(0))));
 Events.On('terminal:exit',event=>{terminal.write(`\r\n\x1b[90m${event.data}\x1b[0m\r\n`);busy(false);preview();});
