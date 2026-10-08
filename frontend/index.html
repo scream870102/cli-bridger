@@ -6,50 +6,92 @@
   <title>CLI Bridger</title>
 </head>
 <body>
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="i-load" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><polygon points="7 4 19 12 7 20 7 4"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect width="13" height="13" x="9" y="9" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-select" viewBox="0 0 24 24"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></symbol>
+    <symbol id="i-eraser" viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></symbol>
+    <symbol id="i-enter" viewBox="0 0 24 24"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  </svg>
   <main class="workbench">
     <header class="app-header">
       <div class="brand"><span class="brand-mark" aria-hidden="true">&gt;_</span><h1>CLI Bridger</h1><span class="badge">DESKTOP</span></div>
-      <span id="status" role="status">尚未連接</span>
+      <div class="header-actions"><span id="status" role="status">尚未連接</span><button id="open-settings" class="icon-button" title="設定" aria-label="設定" aria-haspopup="dialog"><svg class="icon"><use href="#i-gear"/></svg></button></div>
     </header>
     <aside class="command-sidebar" aria-label="指令導覽">
       <h2>COMMANDS <span>指令</span></h2>
       <div id="commands"></div>
-      <p class="sidebar-hint">選擇指令後，設定對應參數。</p>
     </aside>
     <div class="workspace">
       <section class="tool-section" aria-labelledby="tool-heading">
-        <h2 id="tool-heading">CLI TOOL <span>選擇工具</span></h2>
+        <div class="section-heading"><h2 id="tool-heading">CLI TOOL <span>選擇工具</span></h2><p id="settings-message" class="hint" role="status"></p></div>
         <div class="toolbar">
           <select id="runner" aria-label="執行方式"><option value="auto">自動辨識</option><option value="python">Python</option><option value="node">Node.js</option><option value="powershell">PowerShell</option><option value="custom">自訂執行器</option></select>
           <input id="executable" aria-label="CLI 執行檔或腳本" placeholder="工具名稱，或 .exe / .py / .js / .ps1 路徑" spellcheck="false">
-          <button id="browse">瀏覽…</button>
-          <button id="load" class="primary">讀取規格</button>
+          <button id="browse" class="icon-button" title="瀏覽…" aria-label="瀏覽"><svg class="icon"><use href="#i-folder"/></svg></button>
+          <button id="load" class="primary"><svg class="icon"><use href="#i-load"/></svg>讀取規格</button>
+          <button id="reset-settings" class="icon-button" title="重置此工具：只清除目前工具的快取，保留其他工具的設定" aria-label="重置此工具" disabled><svg class="icon"><use href="#i-reset"/></svg></button>
         </div>
-        <div id="custom-runner-row" class="toolbar custom-runner" hidden><input id="custom-runner" aria-label="自訂執行器" placeholder="例如 C:\project\.venv\Scripts\python.exe"><button id="browse-runner">選擇執行器…</button></div>
-        <p class="hint tool-hint">可在工具同目錄放置 <code>完整檔名.cli-bridger.json</code>（例如 <code>tool.exe.cli-bridger.json</code>）。找不到檔案時，才執行工具的 <code>--cli-bridger-describe</code> 查詢規格。</p>
-        <div class="toolbar settings-toolbar"><span class="hint">每個工具的設定分別儲存在程式旁的 cli-bridger.db</span><button id="reset-settings" class="quiet" title="只清除目前工具的快取，保留其他工具的設定" disabled>重置此工具</button></div>
-        <p id="settings-message" class="hint" role="status"></p>
+        <div id="custom-runner-row" class="toolbar custom-runner" hidden><input id="custom-runner" aria-label="自訂執行器" placeholder="例如 C:\project\.venv\Scripts\python.exe"><button id="browse-runner" class="icon-button" title="選擇執行器…" aria-label="選擇執行器"><svg class="icon"><use href="#i-folder"/></svg></button></div>
       </section>
       <div id="error" role="alert" hidden></div>
       <section class="parameter-section" aria-labelledby="parameter-heading">
-        <div class="section-heading"><h2 id="parameter-heading">PARAMETERS <span>參數設定</span></h2><span class="hint">必填項目自動啟用</span></div>
-        <div id="source-warning" class="source-warning" role="note" aria-label="外部規格來源警告" hidden><strong>外部規格：可能非 CLI 作者提供</strong><p>此檔案可能由使用者自行建立或生成，參數與說明的準確性未經 CLI 作者確認。執行前請核對工具版本、參數與命令預覽。</p><code id="source-path"></code></div>
+        <div class="section-heading"><h2 id="parameter-heading">PARAMETERS <span>參數設定</span></h2></div>
+        <div id="source-warning" class="source-warning" role="note" aria-label="外部規格來源警告" hidden><strong>外部規格：可能非 CLI 作者提供</strong><p>此檔案可能由使用者自行建立或生成，參數與說明的準確性未經 CLI 作者確認。執行前請核對工具版本、參數與命令預覽。</p><code id="source-path"></code><button id="reload-file" disabled><svg class="icon"><use href="#i-refresh"/></svg>重新讀取規格檔</button></div>
         <div id="description" class="hint description">載入工具後，這裡會顯示指令與參數。</div>
-        <button id="reload" hidden disabled>套用環境並重讀規格</button>
-        <fieldset id="fields" disabled aria-label="指令參數"><div id="parameters"></div></fieldset>
+        <fieldset id="fields" disabled aria-label="指令參數">
+          <div id="parameters"></div>
+          <details id="env-section" class="env-section" hidden>
+            <summary><svg class="icon chevron"><use href="#i-chevron"/></svg><h2>ENVIRONMENT <span>環境變數</span></h2><span id="env-summary" class="chips"></span></summary>
+            <div class="env-body">
+              <p class="hint">只影響此工具的子程序；未勾選的項目沿用系統原值。</p>
+              <div id="env-parameters"></div>
+              <h3 class="custom-env-heading">自訂環境變數</h3>
+              <div id="custom-env"></div>
+              <div class="toolbar env-actions"><button id="add-env" type="button"><svg class="icon"><use href="#i-plus"/></svg>新增變數</button><button id="reload" type="button" disabled><svg class="icon"><use href="#i-refresh"/></svg>套用環境並重讀規格</button></div>
+            </div>
+          </details>
+        </fieldset>
         <div class="preview"><span>ARGUMENTS</span><code id="preview">等待選擇工具</code></div>
-        <div class="toolbar actions"><span class="hint">執行前會再次檢查所有參數。</span><button id="stop" disabled>停止</button><button id="run" class="primary" disabled>執行指令 <span aria-hidden="true">↵</span></button></div>
+        <div class="toolbar actions"><button id="stop" disabled><svg class="icon"><use href="#i-stop"/></svg>停止</button><button id="run" class="primary" disabled><svg class="icon"><use href="#i-play"/></svg>執行指令</button></div>
       </section>
       <section class="terminal-section" aria-labelledby="terminal-heading">
-        <div class="section-heading"><h2 id="terminal-heading">OUTPUT <span>終端輸出</span></h2><div class="toolbar"><button id="copy-selection" class="quiet" disabled>複製選取</button><button id="copy-output" class="quiet">複製全部</button><button id="clear" class="quiet">清除畫面</button></div></div>
-        <p class="hint">點擊終端即可輸入、按 Enter 回覆；也可使用下方輸入欄。選取文字後 Ctrl+C 複製，未選取時 Ctrl+C 中斷指令。複製全部包含目前保留的輸出（最多 5,000 行捲動記錄）。</p>
+        <div class="section-heading"><h2 id="terminal-heading">OUTPUT <span>終端輸出</span></h2><div class="toolbar"><button id="copy-selection" class="quiet" disabled><svg class="icon"><use href="#i-select"/></svg>複製選取</button><button id="copy-output" class="quiet"><svg class="icon"><use href="#i-copy"/></svg>複製全部</button><button id="clear" class="quiet icon-button" title="清除畫面" aria-label="清除畫面"><svg class="icon"><use href="#i-eraser"/></svg></button></div></div>
         <div id="terminal" aria-label="互動終端"></div>
-        <form id="terminal-input-form" class="toolbar"><label for="terminal-input">回覆指令</label><input id="terminal-input" type="text" placeholder="例如 y，再按 Enter" autocomplete="off" disabled><button id="send-input" type="submit" disabled>送出 Enter</button></form>
+        <form id="terminal-input-form" class="toolbar"><label for="terminal-input">回覆指令</label><input id="terminal-input" type="text" placeholder="例如 y，再按 Enter" autocomplete="off" disabled><button id="send-input" type="submit" disabled><svg class="icon"><use href="#i-enter"/></svg>送出</button></form>
         <span id="copy-status" class="hint" role="status"></span>
       </section>
       <details class="raw-section"><summary>CLI 原始格式說明 <span>JSON</span></summary><pre id="raw">尚未載入</pre></details>
     </div>
   </main>
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <form method="dialog" class="dialog-head"><h2 id="settings-title">SETTINGS <span>設定</span></h2><button class="quiet icon-button" title="關閉" aria-label="關閉"><svg class="icon"><use href="#i-x"/></svg></button></form>
+    <div class="dialog-body">
+      <section class="setting-group" aria-labelledby="record-heading">
+        <h3 id="record-heading">紀錄</h3>
+        <div class="setting"><div><label for="record-settings" class="setting-label">記錄工具設定</label><p id="record-help" class="hint">每個工具的設定分別儲存在程式旁的 <code>cli-bridger.db</code>，下次選擇同一工具時自動還原。關閉後不再讀寫紀錄，現有紀錄保留。</p></div><input id="record-settings" type="checkbox" class="switch" role="switch" aria-describedby="record-help" checked></div>
+        <div class="setting"><div><label for="scrollback" class="setting-label">終端捲動記錄</label><p id="scrollback-help" class="hint">終端保留的最大行數（1,000–100,000），「複製全部」也以此為上限。</p></div><span class="number-field"><input id="scrollback" type="number" min="1000" max="100000" step="1000" value="5000" aria-describedby="scrollback-help"><span>行</span></span></div>
+        <p id="preferences-message" class="hint" role="status"></p>
+      </section>
+      <section class="setting-group" aria-labelledby="source-heading">
+        <h3 id="source-heading">規格來源</h3>
+        <p class="doc">可在工具同目錄放置 <code>完整檔名.cli-bridger.json</code>（例如 <code>tool.exe.cli-bridger.json</code>）。找不到檔案時，才執行工具的 <code>--cli-bridger-describe</code> 查詢規格。</p>
+      </section>
+      <section class="setting-group" aria-labelledby="terminal-help-heading">
+        <h3 id="terminal-help-heading">終端操作</h3>
+        <p class="doc">點擊終端即可輸入、按 Enter 回覆；也可使用下方輸入欄。選取文字後 <code>Ctrl+C</code> 複製，未選取時 <code>Ctrl+C</code> 中斷指令。</p>
+      </section>
+    </div>
+  </dialog>
   <script type="module" src="/src.js"></script>
 </body>
 </html>

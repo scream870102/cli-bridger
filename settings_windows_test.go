@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"cli-bridger/internal/protocol"
 	"github.com/UserExistsError/conpty"
 	bolt "go.etcd.io/bbolt"
 )
@@ -242,7 +243,7 @@ func settingsTestApp(t *testing.T) (*App, Settings) {
 	if _, err := a.acceptDescription(target, nil, []byte(settingsTestDescription), target+".cli-bridger.json"); err != nil {
 		t.Fatal(err)
 	}
-	return a, Settings{Target: target, Runner: "auto", CustomRunner: "自訂", Path: []string{"root"}, Values: map[string]any{"zero": float64(0), "false": false, "unicode": "你好", "blank": ""}, Enabled: map[string]bool{"zero": true, "false": false}, HasDescriptor: true}
+	return a, Settings{Target: target, Runner: "auto", CustomRunner: "自訂", Path: []string{"root"}, Values: map[string]any{"zero": float64(0), "false": false, "unicode": "你好", "blank": ""}, Enabled: map[string]bool{"zero": true, "false": false}, HasDescriptor: true, CustomEnv: []protocol.EnvironmentVariable{{Name: "HTTP_PROXY", Value: "代理"}, {Name: "EMPTY"}}}
 }
 
 func TestSettingsRoundTripAndReset(t *testing.T) {
@@ -418,5 +419,58 @@ func TestSettingsPathLockAndRunningReset(t *testing.T) {
 	a.settingsPath = filepath.Join(t.TempDir(), "missing-directory", "cli-bridger.db")
 	if err := a.SaveSettings(settings); err == nil {
 		t.Fatal("write error not reported")
+	}
+}
+
+func TestPreferencesAndRecordingToggle(t *testing.T) {
+	a, settings := settingsTestApp(t)
+	if got, err := a.LoadPreferences(); err != nil || got != defaultPreferences() {
+		t.Fatalf("defaults: %#v %v", got, err)
+	}
+	for _, scrollback := range []int{999, 100001} {
+		if err := a.SavePreferences(Preferences{RecordSettings: true, Scrollback: scrollback}); err == nil {
+			t.Fatalf("accepted scrollback %d", scrollback)
+		}
+	}
+	if err := a.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	off := Preferences{RecordSettings: false, Scrollback: 20000}
+	if err := a.SavePreferences(off); err != nil {
+		t.Fatal(err)
+	}
+	changed := settings
+	changed.Values = map[string]any{"changed": true}
+	if err := a.SaveSettings(changed); err != nil {
+		t.Fatal(err)
+	}
+	restarted := &App{settingsPath: a.settingsPath}
+	if got, err := restarted.LoadPreferences(); err != nil || got != off {
+		t.Fatalf("preferences restart: %#v %v", got, err)
+	}
+	if got, err := restarted.LoadSettings(); err != nil || got != nil {
+		t.Fatalf("restored while off: %#v %v", got, err)
+	}
+	if got, err := a.GetToolSettings(); err != nil || got != nil {
+		t.Fatalf("tool history while off: %#v %v", got, err)
+	}
+	if err := restarted.SavePreferences(defaultPreferences()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := restarted.LoadSettings()
+	if err != nil || got == nil || !reflect.DeepEqual(got.Settings, settings) {
+		t.Fatalf("records not kept or overwritten while off: %#v %v", got, err)
+	}
+	db, err := bolt.Open(a.settingsPath, 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = db.Update(func(tx *bolt.Tx) error { return tx.Bucket([]byte("preferences")).Put([]byte("app"), []byte(`{"recordSettings":true,"scrollback":5}`)) })
+	db.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&App{settingsPath: a.settingsPath}).LoadPreferences(); err == nil {
+		t.Fatal("invalid stored preferences accepted")
 	}
 }

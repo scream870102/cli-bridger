@@ -11,6 +11,7 @@ import (
 	"github.com/UserExistsError/conpty"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"strings"
@@ -28,6 +29,7 @@ type App struct {
 	descriptionFile string
 	terminal        *conpty.ConPty
 	settingsPath    string
+	prefs           *Preferences
 }
 type Loaded struct {
 	Raw             string               `json:"raw"`
@@ -73,8 +75,8 @@ func (a *App) Describe(target, runner string) (*Loaded, error) {
 	return a.describe(path, prefix, nil)
 }
 
-// Reload applies only declared environment parameters, even before argv is complete.
-func (a *App) Reload(path []string, values map[string]any, enabled map[string]bool) (*Loaded, error) {
+// Reload applies only environment overrides, even before argv is complete.
+func (a *App) Reload(path []string, values map[string]any, enabled map[string]bool, custom []protocol.EnvironmentVariable) (*Loaded, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.terminal != nil {
@@ -86,11 +88,25 @@ func (a *App) Reload(path []string, values map[string]any, enabled map[string]bo
 	if a.descriptionFile != "" {
 		return a.describeFile(a.executable, a.prefix, a.descriptionFile)
 	}
-	env, err := protocol.BuildEnvironment(a.descriptor, path, values, enabled)
+	env, err := a.environment(path, values, enabled, custom)
 	if err != nil {
 		return nil, err
 	}
 	return a.describe(a.executable, a.prefix, env)
+}
+
+// Caller holds mu. Declared parameters and user variables never share a name.
+func (a *App) environment(path []string, values map[string]any, enabled map[string]bool, custom []protocol.EnvironmentVariable) (map[string]string, error) {
+	environment, err := protocol.BuildEnvironment(a.descriptor, path, values, enabled)
+	if err != nil {
+		return nil, err
+	}
+	extra, err := protocol.CustomEnvironment(a.descriptor, path, custom)
+	if err != nil {
+		return nil, err
+	}
+	maps.Copy(environment, extra)
+	return environment, nil
 }
 
 // Caller holds mu. A failed reload leaves the previous description intact.
@@ -163,16 +179,19 @@ func (a *App) PickPath(kind string) (string, error) {
 		return a.desktop.Dialog.OpenFile().SetTitle("選擇檔案").PromptForSingleSelection()
 	}
 }
-func (a *App) Preview(path []string, values map[string]any, enabled map[string]bool) ([]string, error) {
+func (a *App) Preview(path []string, values map[string]any, enabled map[string]bool, custom []protocol.EnvironmentVariable) ([]string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.descriptor == nil {
 		return nil, errors.New("load a CLI description first")
 	}
 	args, err := protocol.BuildArgs(a.descriptor, path, values, enabled)
+	if err == nil {
+		_, err = protocol.CustomEnvironment(a.descriptor, path, custom)
+	}
 	return append(append([]string{a.executable}, a.prefix...), args...), err
 }
-func (a *App) Run(path []string, values map[string]any, enabled map[string]bool, cols, rows int) error {
+func (a *App) Run(path []string, values map[string]any, enabled map[string]bool, custom []protocol.EnvironmentVariable, cols, rows int) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.terminal != nil {
@@ -185,7 +204,7 @@ func (a *App) Run(path []string, values map[string]any, enabled map[string]bool,
 	if err != nil {
 		return err
 	}
-	environment, err := protocol.BuildEnvironment(a.descriptor, path, values, enabled)
+	environment, err := a.environment(path, values, enabled, custom)
 	if err != nil {
 		return err
 	}

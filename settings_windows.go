@@ -2,6 +2,7 @@ package main
 
 import (
 	"cli-bridger/internal/launcher"
+	"cli-bridger/internal/protocol"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,23 @@ type Settings struct {
 	Values        map[string]any  `json:"values"`
 	Enabled       map[string]bool `json:"enabled"`
 	HasDescriptor bool            `json:"hasDescriptor"`
+	// Per tool, like Values; validated against the schema only when used.
+	CustomEnv []protocol.EnvironmentVariable `json:"customEnv,omitempty"`
+}
+
+// Preferences apply to the whole app, unlike per-tool Settings.
+type Preferences struct {
+	RecordSettings bool `json:"recordSettings"`
+	Scrollback     int  `json:"scrollback"`
+}
+
+func defaultPreferences() Preferences { return Preferences{RecordSettings: true, Scrollback: 5000} }
+
+func (p Preferences) validate() error {
+	if p.Scrollback < 1000 || p.Scrollback > 100000 {
+		return errors.New("scrollback must be between 1000 and 100000 lines")
+	}
+	return nil
 }
 
 type RestoredSettings struct {
@@ -99,9 +117,94 @@ func migrateToolSettings(tx *bolt.Tx) (*bolt.Bucket, error) {
 	return history, nil
 }
 
+// Caller holds mu. A missing DB or record means defaults.
+func (a *App) preferences() (Preferences, error) {
+	if a.prefs != nil {
+		return *a.prefs, nil
+	}
+	prefs := defaultPreferences()
+	path, err := a.settingsDBPath()
+	if err != nil {
+		return prefs, err
+	}
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		a.prefs = &prefs
+		return prefs, nil
+	} else if err != nil {
+		return prefs, err
+	}
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: time.Second, ReadOnly: true})
+	if err != nil {
+		return prefs, fmt.Errorf("open settings DB %q: %w", path, err)
+	}
+	defer db.Close()
+	err = db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte("preferences"))
+		if bucket == nil || bucket.Get([]byte("app")) == nil {
+			return nil
+		}
+		if err := json.Unmarshal(bucket.Get([]byte("app")), &prefs); err != nil {
+			return fmt.Errorf("invalid saved preferences: %w", err)
+		}
+		return prefs.validate()
+	})
+	if err != nil {
+		return defaultPreferences(), err
+	}
+	a.prefs = &prefs
+	return prefs, nil
+}
+
+func (a *App) LoadPreferences() (Preferences, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.preferences()
+}
+
+// Turning recording off keeps existing tool records; reset still deletes them.
+func (a *App) SavePreferences(p Preferences) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if err := p.validate(); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	path, err := a.settingsDBPath()
+	if err != nil {
+		return err
+	}
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: time.Second})
+	if err != nil {
+		return fmt.Errorf("open settings DB %q: %w", path, err)
+	}
+	defer db.Close()
+	err = db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists([]byte("preferences"))
+		if err != nil {
+			return err
+		}
+		return bucket.Put([]byte("app"), raw)
+	})
+	if err == nil {
+		a.prefs = &p
+	}
+	return err
+}
+
+func (a *App) recording() (bool, error) {
+	prefs, err := a.preferences()
+	return prefs.RecordSettings, err
+}
+
 func (a *App) SaveSettings(s Settings) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if record, err := a.recording(); !record || err != nil {
+		return err
+	}
 	record := settingsRecord{Settings: s}
 	if s.HasDescriptor {
 		path, prefix, err := launcher.Resolve(s.Target, settingsRunner(s))
@@ -179,6 +282,9 @@ func (a *App) GetToolSettings() (*RestoredSettings, error) {
 	if a.descriptor == nil {
 		return nil, errors.New("load a CLI description first")
 	}
+	if record, err := a.recording(); !record || err != nil {
+		return nil, err
+	}
 	key, err := toolSettingsKey(a.executable, a.prefix)
 	if err != nil {
 		return nil, err
@@ -241,6 +347,9 @@ func (a *App) LoadSettings() (*RestoredSettings, error) {
 	defer a.mu.Unlock()
 	if a.terminal != nil {
 		return nil, errors.New("stop the current command first")
+	}
+	if record, err := a.recording(); !record || err != nil {
+		return nil, err
 	}
 	path, err := a.settingsDBPath()
 	if err != nil {

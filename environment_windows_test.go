@@ -37,7 +37,7 @@ func TestEnvironmentHelper(t *testing.T) {
 	}
 	value := os.Getenv("BRIDGER_TEST_ENV")
 	if os.Args[len(os.Args)-1] == "--cli-bridger-describe" {
-		d := protocol.Descriptor{Version: "1", Name: "env helper", Description: value, Root: protocol.Command{ID: "root", Description: "root", Parameters: []protocol.Parameter{
+		d := protocol.Descriptor{Version: "1", Name: "env helper" + os.Getenv("BRIDGER_TEST_CUSTOM"), Description: value, Root: protocol.Command{ID: "root", Description: "root", Parameters: []protocol.Parameter{
 			{ID: "env", Name: "environment", Description: "child environment", Type: "string", Env: "BRIDGER_TEST_ENV"},
 			{ID: "required", Name: "required", Description: "normal argv", Type: "string", Flag: "--required", Required: true},
 		}}}
@@ -59,19 +59,30 @@ func TestDiscoveryEnvironmentReload(t *testing.T) {
 	if loaded.Descriptor.Description != "inherited" {
 		t.Fatal("initial discovery did not inherit")
 	}
-	loaded, err = a.Reload(nil, map[string]any{"env": "覆寫=value"}, map[string]bool{"env": true})
+	loaded, err = a.Reload(nil, map[string]any{"env": "覆寫=value"}, map[string]bool{"env": true}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if loaded.Descriptor.Description != "覆寫=value" {
 		t.Fatal("reload did not apply override")
 	}
-	loaded, err = a.Reload(nil, map[string]any{"env": "ignored"}, nil)
+	loaded, err = a.Reload(nil, map[string]any{"env": "ignored"}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if loaded.Descriptor.Description != "inherited" || os.Getenv("BRIDGER_TEST_ENV") != "inherited" {
 		t.Fatal("override leaked or disabled did not inherit")
+	}
+	loaded, err = a.Reload(nil, nil, nil, []protocol.EnvironmentVariable{{Name: "BRIDGER_TEST_CUSTOM", Value: "自訂 值"}})
+	if err != nil || loaded.Descriptor.Name != "env helper自訂 值" || os.Getenv("BRIDGER_TEST_CUSTOM") != "" {
+		t.Fatalf("custom variable not applied or leaked: %#v %v", loaded, err)
+	}
+	previous := a.descriptor
+	if _, err := a.Reload(nil, nil, nil, []protocol.EnvironmentVariable{{Name: "bridger_test_env", Value: "x"}}); err == nil || a.descriptor != previous {
+		t.Fatalf("custom variable shadowed declared env: %v", err)
+	}
+	if _, err := a.Preview(nil, map[string]any{"required": "x"}, nil, []protocol.EnvironmentVariable{{Name: "A=B"}}); err == nil {
+		t.Fatal("preview accepted invalid custom variable")
 	}
 }
 

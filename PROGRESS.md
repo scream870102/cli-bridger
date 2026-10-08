@@ -1,5 +1,26 @@
 # CLI Bridger
 
+## Completed task: declutter UI, settings dialog, custom environment (2026-10-08)
+
+Goal: move explanatory text out of the main view, add a settings dialog, icon buttons, collapsible environment section with user-defined variables, compact parameter cards.
+Preview approved via questions: mockup scratchpad/mock/mock.html (#env/#settings states).
+User decisions: record toggle off = stop reading/writing, keep existing records, toggle persisted; custom env per tool, applied to run and reload; custom name colliding with tool env is an error; scrollback 1,000-100,000 default 5,000, global, applied live.
+Acceptance:
+- [x] Gear button beside status opens settings dialog: record toggle, scrollback number, spec-source and terminal-usage text; closes via X/Esc.
+- [x] Record toggle persisted (preferences bucket); off: LoadSettings/GetToolSettings return nothing, SaveSettings writes nothing, existing records kept; on: restore works again.
+- [x] Scrollback persisted, range enforced backend + frontend, applied to terminal immediately and at startup.
+- [x] Reset, browse, runner browse, path picker, clear are icon-only with title/aria-label; load/run/stop/copy/send/reload/add keep text plus icon.
+- [x] Environment parameters render in a separate collapsed details block (closed by default) with required/count chips; reload button inside.
+- [x] Custom env rows add/remove, persisted per tool, restored on tool load, sent to Preview/Run/Reload; invalid/duplicate/colliding names rejected with visible error and run disabled.
+- [x] Removed texts: 必填項目自動啟用, 選擇指令後設定對應參數, 執行前會再次檢查所有參數, terminal hint paragraph, tool-hint, settings db hint (moved into dialog).
+- [x] Parameter card: title row with name/flag and capsules (required, type, default, clickable examples), controls row, full-width description.
+- [x] Go tests, Vite build, build.ps1 pass; real WebView smoke at 800px and 1280px with screenshots; independent review.
+Review: first reviewer hung on its own background job and never reported; rerun with foreground-only rules found no blocker. Fixed: save message no longer claims "設定已儲存" when a recording-on preference save failed. Accepted: corrupt preferences record surfaces errors until preferences are saved again (consistent with corrupt-DB policy).
+Release: user authorized commit, tag and push; tagged v1.3.0 on main.
+Lesson: Wails v3 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS; for CDP smoke build a test exe with go build -overlay replacing main.go to set WindowsOptions.AdditionalBrowserArgs.
+Verification: go test ./... pass; build.ps1 pass; CDP WebView smoke 50/50 (scratchpad smoke/smoke.mjs, test exe built with go build -overlay adding AdditionalBrowserArgs; Wails ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS). Screenshots 1280/800 inspected, no overflow. README updated.
+Knowns: backend app_windows.go/settings_windows.go/internal/protocol; frontend index.html/src.js/style.css. No new dependencies (inline SVG icons). No commit/push.
+
 ## Completed task: per-tool settings cache (2026-10-08)
 
 User correction: cache must retain A and B independently, restoring A's values when returning from B. Last-session-only persistence was insufficient.

@@ -276,9 +276,51 @@ func BuildEnvironment(d *Descriptor, commandPath []string, values map[string]any
 	return environment, err
 }
 
-func build(d *Descriptor, commandPath []string, values map[string]any, enabled map[string]bool, envOnly bool) ([]string, map[string]string, error) {
+// EnvironmentVariable is a user-defined child override outside the descriptor.
+type EnvironmentVariable struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// CustomEnvironment gives each variable exactly one source: names declared by
+// the selected command chain stay owned by the descriptor.
+func CustomEnvironment(d *Descriptor, commandPath []string, custom []EnvironmentVariable) (map[string]string, error) {
+	chain, err := resolve(d, commandPath)
+	if err != nil {
+		return nil, err
+	}
+	declared := map[string]bool{}
+	for _, c := range chain {
+		for _, p := range c.Parameters {
+			if p.Env != "" {
+				declared[strings.ToUpper(p.Env)] = true
+			}
+		}
+	}
+	environment := map[string]string{}
+	for _, v := range custom {
+		key := strings.ToUpper(v.Name)
+		switch {
+		case v.Name == "" || strings.TrimSpace(v.Name) != v.Name || strings.ContainsAny(v.Name, "=\x00"):
+			return nil, fmt.Errorf("invalid environment variable name %q", v.Name)
+		case strings.ContainsRune(v.Value, 0):
+			return nil, fmt.Errorf("environment variable %s: value contains NUL", v.Name)
+		case declared[key]:
+			return nil, fmt.Errorf("environment variable %s is already provided by the tool", v.Name)
+		}
+		for name := range environment {
+			if strings.ToUpper(name) == key {
+				return nil, fmt.Errorf("duplicate environment variable %s", v.Name)
+			}
+		}
+		environment[v.Name] = v.Value
+	}
+	return environment, nil
+}
+
+func resolve(d *Descriptor, commandPath []string) ([]Command, error) {
 	if err := d.validate(); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	chain := []Command{d.Root}
 	current := d.Root
@@ -293,8 +335,16 @@ func build(d *Descriptor, commandPath []string, values map[string]any, enabled m
 			}
 		}
 		if !found {
-			return nil, nil, fmt.Errorf("unknown command %q", id)
+			return nil, fmt.Errorf("unknown command %q", id)
 		}
+	}
+	return chain, nil
+}
+
+func build(d *Descriptor, commandPath []string, values map[string]any, enabled map[string]bool, envOnly bool) ([]string, map[string]string, error) {
+	chain, err := resolve(d, commandPath)
+	if err != nil {
+		return nil, nil, err
 	}
 	var args []string
 	active := map[string]string{}

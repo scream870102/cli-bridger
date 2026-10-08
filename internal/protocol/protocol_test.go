@@ -176,3 +176,42 @@ func TestInvalidEnvironmentSchema(t *testing.T) {
 		t.Fatal("accepted inherited case-insensitive duplicate env")
 	}
 }
+
+func TestCustomEnvironment(t *testing.T) {
+	d, err := Parse([]byte(sample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Root.Commands[0].Parameters = append(d.Root.Commands[0].Parameters, Parameter{ID: "media", Description: "Media directory", Env: "APP_MEDIA", Type: "path"})
+	got, err := CustomEnvironment(d, []string{"run"}, []EnvironmentVariable{{"HTTP_PROXY", "http://127.0.0.1:7890"}, {"ProgramFiles(x86)", "中文=a"}, {"EMPTY", ""}})
+	want := map[string]string{"HTTP_PROXY": "http://127.0.0.1:7890", "ProgramFiles(x86)": "中文=a", "EMPTY": ""}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v %v", got, err)
+	}
+	// A subcommand's declaration only owns the name when that subcommand is selected.
+	if got, err := CustomEnvironment(d, nil, []EnvironmentVariable{{"app_media", "x"}}); err != nil || got["app_media"] != "x" {
+		t.Fatalf("root path rejected unrelated name: %#v %v", got, err)
+	}
+	for _, tt := range []struct {
+		name   string
+		custom []EnvironmentVariable
+		bad    string
+	}{
+		{"empty name", []EnvironmentVariable{{"", "x"}}, "invalid"},
+		{"padded name", []EnvironmentVariable{{" A", "x"}}, "invalid"},
+		{"equals", []EnvironmentVariable{{"A=B", "x"}}, "invalid"},
+		{"NUL name", []EnvironmentVariable{{"A\x00", "x"}}, "invalid"},
+		{"NUL value", []EnvironmentVariable{{"A", "a\x00b"}}, "NUL"},
+		{"declared", []EnvironmentVariable{{"app_media", "x"}}, "provided by the tool"},
+		{"duplicate", []EnvironmentVariable{{"Proxy", "a"}, {"PROXY", "b"}}, "duplicate"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := CustomEnvironment(d, []string{"run"}, tt.custom); err == nil || !strings.Contains(err.Error(), tt.bad) {
+				t.Fatalf("wanted %s, got %v", tt.bad, err)
+			}
+		})
+	}
+	if _, err := CustomEnvironment(d, []string{"missing"}, nil); err == nil {
+		t.Fatal("unknown command accepted")
+	}
+}

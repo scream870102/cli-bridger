@@ -49,7 +49,7 @@ func TestSidecarTargetsAndPreview(t *testing.T) {
 			if loaded.DescriptionFile != file || loaded.Target != target || loaded.Raw != sidecarJSON {
 				t.Fatalf("incorrect source metadata: %+v", loaded)
 			}
-			args, err := a.Preview(nil, map[string]any{"message": "hello world"}, map[string]bool{"message": true})
+			args, err := a.Preview(nil, map[string]any{"message": "hello world"}, map[string]bool{"message": true}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -138,19 +138,19 @@ func TestSidecarReloadAndSourceTransitions(t *testing.T) {
 	}
 	updated := strings.Replace(sidecarJSON, "External CLI", "Updated CLI", 1)
 	writeSidecarFixture(t, file, updated)
-	loaded, err = a.Reload(nil, nil, nil)
+	loaded, err = a.Reload(nil, nil, nil, nil)
 	if err != nil || loaded.Descriptor.Name != "Updated CLI" || loaded.DescriptionFile != file {
 		t.Fatalf("external reload: %+v, %v", loaded, err)
 	}
 	previous := a.descriptor
 	writeSidecarFixture(t, file, `{}`)
-	if _, err := a.Reload(nil, nil, nil); err == nil || a.descriptor != previous {
+	if _, err := a.Reload(nil, nil, nil, nil); err == nil || a.descriptor != previous {
 		t.Fatal("invalid reload must retain the previous descriptor")
 	}
 	if err := os.Remove(file); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Reload(nil, nil, nil); err == nil || a.descriptor != previous || a.descriptionFile != file {
+	if _, err := a.Reload(nil, nil, nil, nil); err == nil || a.descriptor != previous || a.descriptionFile != file {
 		t.Fatal("removed file must fail while retaining description and source")
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
