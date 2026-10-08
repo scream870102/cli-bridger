@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const sample = `{"version":"1","name":"demo","root":{"id":"root","name":"","parameters":[{"id":"verbose","flag":"--verbose","type":"bool","default":false}],"commands":[{"id":"run","name":"run","parameters":[{"id":"count","flag":"--count","type":"int","required":true,"default":3,"limits":{"min":1,"max":5}},{"id":"mode","flag":"--mode","type":"string","default":"fast","enum":["fast","slow"]},{"id":"detail","flag":"--detail","type":"string","required":true,"dependsOn":{"id":"verbose","value":true}},{"id":"input","type":"path","required":true}]}]}}`
+const sample = `{"version":"1","name":"demo","description":"Demonstrate typed arguments","root":{"id":"root","name":"","description":"Choose an operation","parameters":[{"id":"verbose","description":"Show detailed output","flag":"--verbose","type":"bool","default":false}],"commands":[{"id":"run","name":"run","description":"Process an input file","parameters":[{"id":"count","description":"Number of processing iterations","flag":"--count","type":"int","required":true,"default":3,"limits":{"min":1,"max":5}},{"id":"mode","description":"Select processing speed","flag":"--mode","type":"string","default":"fast","enum":["fast","slow"]},{"id":"detail","description":"Text to include in verbose output","flag":"--detail","type":"string","required":true,"dependsOn":{"id":"verbose","value":true}},{"id":"input","description":"Path of the input file","type":"path","required":true}]}]}}`
 
 func TestBuildArgs(t *testing.T) {
 	d, err := Parse([]byte(sample))
@@ -53,6 +53,9 @@ func TestBuildArgs(t *testing.T) {
 }
 
 func TestRejectInvalidSchema(t *testing.T) {
+	if _, err := Parse([]byte(sample)); err != nil {
+		t.Fatalf("invalid baseline fixture: %v", err)
+	}
 	for _, pair := range [][2]string{{`"version":"1"`, `"version":"2"`}, {`"id":"count"`, `"id":"verbose"`}, {`"type":"int"`, `"type":"integer"`}, {`"default":3`, `"default":7`}, {`"min":1`, `"min":9`}, {`"id":"verbose","value":true`, `"id":"missing","value":true`}, {`"type":"path"`, `"type":"path","pathKind":"device"`}, {`"flag":"--count"`, `"flag":"--count;rm"`}} {
 		if _, err := Parse([]byte(strings.Replace(sample, pair[0], pair[1], 1))); err == nil {
 			t.Errorf("accepted replacement %s", pair[1])
@@ -68,5 +71,25 @@ func TestRejectInvalidSchema(t *testing.T) {
 	d.Root.Parameters[0].Limits = &Limits{Min: new(float64)}
 	if _, err := BuildArgs(&d, nil, nil, nil); err == nil {
 		t.Fatal("invalid direct descriptor accepted")
+	}
+}
+
+func TestDescriptionsRequired(t *testing.T) {
+	for _, target := range []struct{ description, context string }{
+		{"Demonstrate typed arguments", `tool "demo"`},
+		{"Choose an operation", `command "root"`},
+		{"Process an input file", `command "run"`},
+		{"Show detailed output", `parameter "verbose"`},
+		{"Number of processing iterations", `parameter "count"`},
+	} {
+		for _, replacement := range []string{"", `"description":"",`, `"description":" \t\n\u3000",`} {
+			t.Run(target.context+"/"+replacement, func(t *testing.T) {
+				data := strings.Replace(sample, `"description":"`+target.description+`",`, replacement, 1)
+				_, err := Parse([]byte(data))
+				if err == nil || !strings.Contains(err.Error(), target.context+": description") {
+					t.Fatalf("expected description error identifying %s, got %v", target.context, err)
+				}
+			})
+		}
 	}
 }

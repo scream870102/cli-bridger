@@ -16,20 +16,20 @@ import (
 type Descriptor struct {
 	Version     string  `json:"version"`
 	Name        string  `json:"name"`
-	Description string  `json:"description,omitempty"`
+	Description string  `json:"description"`
 	Root        Command `json:"root"`
 }
 type Command struct {
 	ID          string      `json:"id"`
 	Name        string      `json:"name"`
-	Description string      `json:"description,omitempty"`
+	Description string      `json:"description"`
 	Parameters  []Parameter `json:"parameters,omitempty"`
 	Commands    []Command   `json:"commands,omitempty"`
 }
 type Parameter struct {
 	ID          string      `json:"id"`
 	Name        string      `json:"name,omitempty"`
-	Description string      `json:"description,omitempty"`
+	Description string      `json:"description"`
 	Flag        string      `json:"flag,omitempty"`
 	Type        string      `json:"type"`
 	Required    bool        `json:"required,omitempty"`
@@ -74,6 +74,9 @@ func (d *Descriptor) validate() error {
 	if d == nil || d.Version != "1" || strings.TrimSpace(d.Name) == "" {
 		return fmt.Errorf("descriptor requires version 1 and a name")
 	}
+	if strings.TrimSpace(d.Description) == "" {
+		return fmt.Errorf("tool %q: description is required and must not be blank", d.Name)
+	}
 	seen := map[string]bool{}
 	var visit func(Command, map[string]Parameter, bool) error
 	visit = func(c Command, inherited map[string]Parameter, root bool) error {
@@ -81,6 +84,9 @@ func (d *Descriptor) validate() error {
 			return fmt.Errorf("invalid or duplicate command id %q", c.ID)
 		}
 		seen[c.ID] = true
+		if strings.TrimSpace(c.Description) == "" {
+			return fmt.Errorf("command %q: description is required and must not be blank", c.ID)
+		}
 		if !root && !identifier.MatchString(c.Name) {
 			return fmt.Errorf("invalid command name %q", c.Name)
 		}
@@ -98,6 +104,9 @@ func (d *Descriptor) validate() error {
 				return fmt.Errorf("invalid or duplicate parameter id %q", p.ID)
 			}
 			seen[p.ID] = true
+			if strings.TrimSpace(p.Description) == "" {
+				return fmt.Errorf("parameter %q: description is required and must not be blank", p.ID)
+			}
 			switch p.Type {
 			case "string", "int", "float", "path", "bool":
 			default:

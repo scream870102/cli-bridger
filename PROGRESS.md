@@ -1,5 +1,15 @@
 # CLI Bridger
 
+## Current task: purpose descriptions (2026-10-08)
+
+User requested purpose explanations for every command and parameter. Reuse description, require nonblank text for tool/root/commands/parameters, complete Go/Python demo responses and docs, and render visible help in sidebar/forms including disabled optional parameters. Preserve user's existing README manual build edits.
+
+- [x] Protocol validation/tests, docs and demos complete.
+- [x] Visible command/parameter help and accessible input descriptions implemented.
+- [x] Rebuild and verify actual desktop help rendering; independent review.
+
+Verification: all Go tests and Vite production build passed. Actual Wails WebView smoke loaded Python demo, verified root with no parameters, sidebar/current command explanations, optional help before enable, accessible input links and conditional help, then ran demo successfully. Screenshot .cache/help-preview.png inspected. Independent review passed all criteria. Rebuilt build/bin/cli-bridger.exe and demo-cli.exe; diagnostic port existed only in a temporary Go overlay, and test PID 47088 was closed. No outstanding work for this task.
+
 Goal: Generate a desktop GUI from a versioned CLI JSON description.
 
 Decision: Go + Wails v3 Beta (user selected v3 during implementation); vanilla JavaScript + xterm.js; Windows ConPTY first. Pin framework version and adapt desktop lifecycle/runtime before final verification.

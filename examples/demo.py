@@ -13,17 +13,21 @@ DESCRIPTOR = {
     "root": {
         "id": "root",
         "name": "",
+        "description": "Choose render to demonstrate live terminal output from Python.",
         "commands": [{
             "id": "render",
             "name": "render",
             "description": "Render a terminal progress bar",
             "parameters": [
                 {"id": "steps", "name": "Steps", "flag": "--steps", "type": "int",
+                 "description": "Number of progress updates, with a 0.05-second pause after each update.",
                  "required": True, "default": 20, "examples": [10, 50],
                  "limits": {"min": 1, "max": 100}},
                 {"id": "color", "name": "Colored output", "flag": "--color",
+                 "description": "Display the progress bar in cyan using ANSI terminal color codes.",
                  "type": "bool", "default": True},
                 {"id": "label", "name": "Progress label", "flag": "--label",
+                 "description": "Text printed above the progress bar; editable here when colored output is enabled.",
                  "type": "string", "default": "Hello from Python",
                  "examples": ["Processing files", "Building assets"],
                  "limits": {"minLength": 1, "maxLength": 80},

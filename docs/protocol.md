@@ -6,19 +6,23 @@ A cooperating executable handles `--cli-bridger-describe` as its only argument. 
 {
   "version": "1",
   "name": "example",
-  "description": "Example CLI",
+  "description": "Inspect revision history with configurable output formatting",
   "root": {
     "id": "root",
     "name": "",
+    "description": "Choose a history operation",
     "commands": [{
       "id": "log",
       "name": "log",
       "description": "Show history",
       "parameters": [
-        {"id": "oneline", "flag": "--oneline", "type": "bool", "default": true},
+        {"id": "oneline", "description": "Show each history entry on one line",
+         "flag": "--oneline", "type": "bool", "default": true},
         {"id": "count", "flag": "--count", "type": "int", "required": true,
+         "description": "Maximum number of history entries to display",
          "default": 10, "examples": [5, 20], "limits": {"min": 1, "max": 100}},
         {"id": "prefix", "flag": "--prefix", "type": "string", "default": "commit",
+         "description": "Text prepended to each one-line history entry",
          "examples": ["change"], "limits": {"minLength": 1, "maxLength": 40},
          "dependsOn": {"id": "oneline", "value": true}}
       ]
@@ -31,14 +35,17 @@ The example illustrates the protocol; it is not a descriptor accepted by stock G
 
 ## Fields
 
-Descriptor requires `version` (the string `"1"`), `name`, and `root`; `description` is optional. Unknown fields are rejected so accidental misspellings fail visibly.
+Descriptor requires `version` (the string `"1"`), `name`, `description`, and `root`. Every tool, command (including root), and parameter must provide a nonblank plain-text `description` explaining its purpose and effect. Missing, empty, or whitespace-only descriptions are rejected with the tool name or offending command/parameter ID. Unknown fields are rejected so accidental misspellings fail visibly.
 
-Each command has a globally unique `id`, a `name` (literal argv token), optional `description`, ordered `parameters`, and nested `commands`. The root's `name` is ignored and should be empty. Selecting a child reveals its parameters; ancestor parameters remain active. Command IDs are used in the GUI selection path; names are passed to the executable. IDs and non-root command names match `[A-Za-z][A-Za-z0-9_.-]*`.
+Each command has a globally unique `id`, a `name` (literal argv token), required `description`, ordered `parameters`, and nested `commands`. The root's `name` is ignored and should be empty. Selecting a child reveals its parameters; ancestor parameters remain active. Command IDs are used in the GUI selection path; names are passed to the executable. IDs and non-root command names match `[A-Za-z][A-Za-z0-9_.-]*`.
+
+Migration: this version 1 prototype previously allowed omitted descriptions. Existing descriptors must now supply meaningful descriptions for the tool, root, every nested command, and every parameter; the prototype version remains `"1"`. Descriptions are displayed as text, not interpreted as HTML or Markdown.
 
 | Parameter field | Meaning |
 | --- | --- |
 | `id` | Required, globally unique across commands and parameters |
-| `name`, `description` | Optional display label and help |
+| `name` | Optional display label |
+| `description` | Required nonblank plain-text explanation of what the parameter controls |
 | `flag` | Option spelling, e.g. `--count` or `-n`; absent/empty means positional |
 | `type` | Required: `string`, `int`, `float`, `path`, or `bool` |
 | `required` | Defaults to false; true activates automatically when dependencies match |

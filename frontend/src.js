@@ -37,26 +37,27 @@ function render() {
  chain.forEach((command,level)=>{
   if(command.commands?.length) {
    const row=el('div',undefined,'command-row'); row.append(el('span',level?'下一層子命令':'子命令','hint'));
-   const root=el('button','此層命令',path.length===level?'selected':''); root.onclick=()=>{path=path.slice(0,level); render();};row.append(root);
-   command.commands.forEach(c=>{const b=el('button',c.name,path[level]===c.id?'selected':'');b.title=c.description||'';b.onclick=()=>{path=[...path.slice(0,level),c.id];render();};row.append(b);});commands.append(row);
+   const root=el('button','此層命令',path.length===level?'selected':''); root.append(el('small',command.description,'command-help'));root.onclick=()=>{path=path.slice(0,level); render();};row.append(root);
+   command.commands.forEach(c=>{const b=el('button',c.name,path[level]===c.id?'selected':'');b.append(el('small',c.description,'command-help'));b.onclick=()=>{path=[...path.slice(0,level),c.id];render();};row.append(b);});commands.append(row);
   }
-  if(command.parameters?.length)parameters.append(el('h3',command.name||descriptor.name));
+  parameters.append(el('h3',command.name||descriptor.name),el('p',command.description,'hint command-description'));
   for(const p of command.parameters||[]) {
    const dep=p.dependsOn;
    if(dep&&(!active.has(dep.id)||effective(active.get(dep.id))!==dep.value))continue;
    const row=el('div',undefined,'parameter'), title=el('div',undefined,'parameter-title');
    const label=el('label',p.name?`${p.name}${p.flag?` (${p.flag})`:''}`:p.flag||p.id); label.htmlFor=`value-${p.id}`;
    if(!p.required) {
-    const toggle=el('input');toggle.type='checkbox';toggle.checked=enabled[p.id]===true;toggle.setAttribute('aria-label',`啟用 ${p.id}`);
+    const toggle=el('input');toggle.type='checkbox';toggle.checked=enabled[p.id]===true;toggle.setAttribute('aria-label',`啟用 ${p.id}`);toggle.setAttribute('aria-describedby',`help-${p.id}`);
     toggle.onchange=()=>{enabled[p.id]=toggle.checked;if(toggle.checked&&p.type==='bool'&&effective(p)===undefined)values[p.id]=true;render();};title.append(toggle);
    }
    title.append(label,el('span',p.required?'必填':p.type,'badge'));row.append(title);
-   if(p.description)row.append(el('p',p.description,'hint'));
+   const help=el('p',p.description,'hint parameter-description');help.id=`help-${p.id}`;row.append(help);
    if(active.has(p.id)) {
     const controls=el('div',undefined,'controls'); let input;
     if(p.enum?.length) {input=el('select');input.append(new Option('請選擇',''));p.enum.forEach(v=>input.append(new Option(String(v),String(v))));}
     else { input=el('input');input.type=p.type==='bool'?'checkbox':['int','float'].includes(p.type)?'number':'text'; }
     input.id=`value-${p.id}`;
+    input.setAttribute('aria-describedby',help.id);
     const numeric=['int','float'].includes(p.type), current=effective(p);
     if(p.type==='bool'&&!p.enum?.length)input.checked=current===true;else input.value=current??'';
     if(numeric){input.step=p.type==='int'?'1':'any';if(p.limits?.min!=null)input.min=p.limits.min;if(p.limits?.max!=null)input.max=p.limits.max;}
@@ -65,6 +66,7 @@ function render() {
     let slider;
     if(numeric && p.limits?.min!=null && p.limits?.max!=null) {
      slider=el('input');slider.type='range';slider.min=p.limits.min;slider.max=p.limits.max;slider.step=p.type==='int'?'1':'any';slider.value=current??p.limits.min;slider.setAttribute('aria-label',`${p.id} 滑桿`);
+     slider.setAttribute('aria-describedby',help.id);
      slider.oninput=()=>{input.value=slider.value;values[p.id]=Number(slider.value);preview();};slider.onchange=()=>render();controls.append(slider);
     }
     input.oninput=()=>{ values[p.id]=p.type==='bool'?(p.enum?.length?input.value==='true':input.checked):numeric&&input.value!==''?Number(input.value):input.value; if(slider&&input.value!=='')slider.value=input.value;preview();};

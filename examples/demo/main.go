@@ -52,11 +52,11 @@ func main() {
 func descriptor() protocol.Descriptor {
 	minSteps, maxSteps, minDelay, maxDelay := 1.0, 100.0, 0.0, 1.0
 	minText, maxText := 1, 80
-	return protocol.Descriptor{Version: "1", Name: "CLI Bridger Demo", Description: "A safe progress-bar demo. It displays parameters without modifying files.", Root: protocol.Command{ID: "root", Name: "", Commands: []protocol.Command{{ID: "render", Name: "render", Description: "Render a terminal progress bar", Parameters: []protocol.Parameter{
-		{ID: "steps", Name: "Steps", Flag: "--steps", Type: "int", Required: true, Default: 20, Examples: []any{10, 50}, Limits: &protocol.Limits{Min: &minSteps, Max: &maxSteps}},
-		{ID: "delay", Name: "Delay (seconds)", Flag: "--delay", Type: "float", Default: 0.05, Examples: []any{0.01, 0.1}, Limits: &protocol.Limits{Min: &minDelay, Max: &maxDelay}},
-		{ID: "color", Name: "Colored output", Flag: "--color", Type: "bool", Default: true},
-		{ID: "label", Name: "Progress label", Flag: "--label", Type: "string", Default: "Hello CLI Bridger", Examples: []any{"Building assets", "Processing files"}, Limits: &protocol.Limits{MinLength: &minText, MaxLength: &maxText}, DependsOn: &protocol.Dependency{ID: "color", Value: true}},
+	return protocol.Descriptor{Version: "1", Name: "CLI Bridger Demo", Description: "A safe progress-bar demo. It displays parameters without modifying files.", Root: protocol.Command{ID: "root", Name: "", Description: "Choose render to demonstrate live terminal output.", Commands: []protocol.Command{{ID: "render", Name: "render", Description: "Render a terminal progress bar", Parameters: []protocol.Parameter{
+		{ID: "steps", Name: "Steps", Description: "Number of progress updates before completion; more steps take longer at the same delay.", Flag: "--steps", Type: "int", Required: true, Default: 20, Examples: []any{10, 50}, Limits: &protocol.Limits{Min: &minSteps, Max: &maxSteps}},
+		{ID: "delay", Name: "Delay (seconds)", Description: "Seconds to pause between progress updates; use zero to finish immediately.", Flag: "--delay", Type: "float", Default: 0.05, Examples: []any{0.01, 0.1}, Limits: &protocol.Limits{Min: &minDelay, Max: &maxDelay}},
+		{ID: "color", Name: "Colored output", Description: "Display the progress bar in cyan using ANSI terminal color codes.", Flag: "--color", Type: "bool", Default: true},
+		{ID: "label", Name: "Progress label", Description: "Text printed above the progress bar; editable here when colored output is enabled.", Flag: "--label", Type: "string", Default: "Hello CLI Bridger", Examples: []any{"Building assets", "Processing files"}, Limits: &protocol.Limits{MinLength: &minText, MaxLength: &maxText}, DependsOn: &protocol.Dependency{ID: "color", Value: true}},
 		{ID: "source", Name: "Source path", Flag: "--source", Type: "path", PathKind: "file", Description: "Shown in output; never opened or modified", Examples: []any{"example.txt"}},
 	}}}}}
 }

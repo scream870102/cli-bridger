@@ -49,7 +49,7 @@ h2 span { color: #d6dce4; font-size: 12px; font-weight: 500; letter-spacing: 0; 
 h3 { font: 12px var(--mono); color: var(--accent); margin: 18px 0 10px; }
 p { margin: 7px 0; }
 
-.command-sidebar { background: #1c2026; border-right: 1px solid var(--border); padding: 21px 12px; min-width: 0; }
+.command-sidebar { background: #1c2026; border-right: 1px solid var(--border); padding: 21px 12px; min-width: 0; max-height: calc(100vh - 54px); overflow-y: auto; }
 .command-sidebar h2 { gap: 8px; padding: 0 7px 18px; font-size: 10px; }
 .command-sidebar h2 span { font-size: 11px; color: var(--muted); }
 .sidebar-hint { padding: 12px 7px; color: #939daa; font-size: 11px; line-height: 1.7; border-top: 1px solid var(--border); margin-top: 22px; }
@@ -60,6 +60,8 @@ p { margin: 7px 0; }
 .command-row button::before { content: "›"; color: #7a8796; margin-right: 8px; }
 .command-row button.selected { background: #223a36; color: #8ae3cc; border-color: #35594f; }
 .command-row button.selected::before { color: var(--accent); }
+.command-help { display: block; margin: 5px 0 0 15px; color: var(--muted); font: 11px/1.5 "Segoe UI", "Microsoft JhengHei", sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
+.command-description, .parameter-description { white-space: pre-wrap; overflow-wrap: anywhere; }
 .command-row + .command-row { margin-left: 8px; border-left: 1px solid #3d4851; padding-left: 5px; }
 
 .workspace { min-width: 0; display: flex; flex-direction: column; height: calc(100vh - 54px); min-height: 700px; }
