@@ -82,6 +82,9 @@ p { margin: 7px 0; }
 .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 26px; margin-bottom: 10px; }
 .section-heading > .hint { font-size: 14px; }
 .description { margin-bottom: 6px; }
+.source-warning { padding: 14px 16px; margin-bottom: 14px; border: 1px solid #a68038; border-radius: 8px; background: #292317; color: #f3d79d; line-height: 1.6; }
+.source-warning p { margin: 5px 0; }
+.source-warning code { overflow-wrap: anywhere; font-size: 14px; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 #parameters:empty { min-height: 65px; border-top: 1px solid #343434; }
 .parameter { display: grid; grid-template-columns: minmax(175px, .85fr) minmax(230px, 1.5fr); column-gap: 24px; row-gap: 10px; padding: 20px; margin: 12px 0; background: #202020; border: 1px solid #414141; border-radius: 12px; }

@@ -1,0 +1,28 @@
+{
+  "version": "1",
+  "name": "第三方 CLI 範例",
+  "description": "透過同目錄的外部規格操作沒有握手功能的 Python CLI。",
+  "root": {
+    "id": "root",
+    "name": "",
+    "description": "輸出指定訊息，可選擇轉成大寫。",
+    "parameters": [
+      {
+        "id": "message",
+        "name": "訊息",
+        "description": "要輸出的文字。",
+        "flag": "--message",
+        "type": "string",
+        "required": true,
+        "default": "Hello from a third-party CLI"
+      },
+      {
+        "id": "uppercase",
+        "name": "轉成大寫",
+        "description": "啟用後將輸出訊息轉成大寫。",
+        "flag": "--uppercase",
+        "type": "bool"
+      }
+    ]
+  }
+}

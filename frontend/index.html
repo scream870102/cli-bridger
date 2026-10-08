@@ -26,11 +26,12 @@
           <button id="load" class="primary">讀取規格</button>
         </div>
         <div id="custom-runner-row" class="toolbar custom-runner" hidden><input id="custom-runner" aria-label="自訂執行器" placeholder="例如 C:\project\.venv\Scripts\python.exe"><button id="browse-runner">選擇執行器…</button></div>
-        <p class="hint tool-hint">工具需支援 <code>--cli-bridger-describe</code>。讀取規格會執行程式，請選擇你信任的工具。</p>
+        <p class="hint tool-hint">可在工具同目錄放置 <code>完整檔名.cli-bridger.json</code>（例如 <code>tool.exe.cli-bridger.json</code>）。找不到檔案時，才執行工具的 <code>--cli-bridger-describe</code> 查詢規格。</p>
       </section>
       <div id="error" role="alert" hidden></div>
       <section class="parameter-section" aria-labelledby="parameter-heading">
         <div class="section-heading"><h2 id="parameter-heading">PARAMETERS <span>參數設定</span></h2><span class="hint">必填項目自動啟用</span></div>
+        <div id="source-warning" class="source-warning" role="note" aria-label="外部規格來源警告" hidden><strong>外部規格：可能非 CLI 作者提供</strong><p>此檔案可能由使用者自行建立或生成，參數與說明的準確性未經 CLI 作者確認。執行前請核對工具版本、參數與命令預覽。</p><code id="source-path"></code></div>
         <div id="description" class="hint description">載入工具後，這裡會顯示指令與參數。</div>
         <button id="reload" hidden disabled>套用環境並重讀規格</button>
         <fieldset id="fields" disabled aria-label="指令參數"><div id="parameters"></div></fieldset>

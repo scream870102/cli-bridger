@@ -1,6 +1,20 @@
 # CLI Bridger protocol v1
 
-A cooperating executable handles `--cli-bridger-describe` as its only argument. It exits successfully and writes exactly one UTF-8 JSON object to stdout. Diagnostics belong on stderr. Discovery must not prompt or modify files. CLI Bridger never guesses a schema from `--help`; tools without this handshake need an adapter.
+A cooperating executable handles `--cli-bridger-describe` as its only argument. It exits successfully and writes exactly one UTF-8 JSON object to stdout. Diagnostics belong on stderr. Discovery must not prompt or modify files. CLI Bridger never guesses a schema from `--help`; tools without this handshake can use a user-authored sidecar descriptor or an adapter.
+
+## External descriptor files
+
+Place a UTF-8 JSON descriptor next to the selected executable or script, named `<complete-target-filename>.cli-bridger.json`. For `tool.exe` use `tool.exe.cli-bridger.json`; for `tool.py` use `tool.py.cli-bridger.json`. A PATH lookup uses the resolved executable's directory. Interpreter-based targets use the script's path, not the interpreter's directory. No generic directory-wide filename or extension-stripping lookup is performed.
+
+An existing sidecar takes priority over the discovery command, so loading it does not execute the CLI. Only absence permits native discovery. Invalid, unreadable, nonregular or oversized sidecars report an error instead of invoking the CLI. Sidecars have the same 1 MiB limit and strict `Parse` validation as native descriptors; all tool, command and parameter descriptions are required. No new JSON fields are needed.
+
+The UI displays the actual source path and a persistent warning that external specifications may be user-generated, may not come from the CLI author and may be inaccurate. Passing schema validation does not verify compatibility with the installed CLI version. An external file cannot claim trusted provenance or suppress this warning through its contents.
+
+Reload rereads the previously selected sidecar without executing the CLI. Failure keeps the last successfully loaded descriptor and source. Environment bindings still affect execution, but cannot dynamically change a static file. A fresh load checks file presence again. Native discovery/reload behavior remains unchanged for tools loaded without a sidecar.
+
+See [a working ordinary Python CLI](../examples/third-party.py) and [its sidecar](../examples/third-party.py.cli-bridger.json). Existing argument-generation restrictions, including `--flag=value` syntax, also apply to external specifications.
+
+## Descriptor example
 
 ```json
 {

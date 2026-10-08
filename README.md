@@ -52,7 +52,27 @@ Tag 格式為 `v主版.次版.修訂版`，例如 `v1.2.3`；可加預發佈後�
 
 執行器須已安裝且位於 PATH。可手動選擇 Python／Node.js／PowerShell，或選「自訂執行器」指定例如 `.venv/Scripts/python.exe`；一般自訂模式使用 `執行器 腳本 ...`，不解析 shell 指令字串。自訂 PowerShell/pwsh 仍會使用 `-NoProfile -File`；不接受 cmd/wsl 作為自訂執行器。不變更 PowerShell execution policy。
 
-已有工具不會自動支援本協定。例如原版 Git 沒有此握手旗標，需工具作者實作，或另寫配接 CLI。
+沒有握手功能的第三方 CLI 也可使用下方的外部規格檔，不需要修改 CLI 本身。
+
+### 第三方 CLI：同目錄外部規格
+
+在工具旁邊建立 UTF-8 JSON 檔，名稱為「完整工具檔名 + `.cli-bridger.json`」，保留原始副檔名：
+
+| 選取的工具 | 同目錄規格檔 |
+| --- | --- |
+| `tool.exe` | `tool.exe.cli-bridger.json` |
+| `tool.py` | `tool.py.cli-bridger.json` |
+| `tool.cjs` | `tool.cjs.cli-bridger.json` |
+
+檔案使用相同的 [v1 規格格式](docs/protocol.md)，可以由使用者自行撰寫或生成，不需要 CLI 作者配合。在 App 選取工具本身、按「讀取規格」即可；不是選取 JSON 檔。以 PATH 工具名稱載入時，會到實際找到的執行檔旁尋找；腳本則找在腳本旁，而非 Python／Node 執行器旁。
+
+找到外部規格時會優先讀取，**不執行 `--cli-bridger-describe`**。只有檔案不存在時才使用原有握手。外部檔案格式錯誤、無法讀取或超過 1 MiB 時會直接顯示錯誤，不會改成呼叫 CLI。App 會持續顯示來源檔案路徑，以及「可能非 CLI 作者提供、準確性未經確認」的警告；檔案不能透過自訂作者欄位取消警告。
+
+修改檔案後按「重新讀取規格檔」，會保留仍相容的輸入。若重新讀取失敗，保留上次成功載入的規格及警告，不呼叫第三方 CLI。外部 JSON 是靜態規格；其中 `env` 欄位仍會在執行 CLI 時套用，但重讀檔案不會依環境重新生成內容。
+
+可直接試用 [`examples/third-party.py`](examples/third-party.py)：它只有一般 argparse 參數，沒有握手功能；旁邊的 [`third-party.py.cli-bridger.json`](examples/third-party.py.cli-bridger.json) 提供 UI 規格。安裝 Python 後，在 App 選取該 `.py`，輸入訊息並執行即可。
+
+請依實際 CLI 版本核對參數。格式驗證僅確認 JSON 與欄位合法，不保證外部說明正確；例如目前帶值旗標使用 `--flag=value`，不接受這種語法的工具仍需配接程式。
 
 ## 建置與開發
 
@@ -180,7 +200,7 @@ go run .
 
 ## CLI 作者
 
-實作以下握手；stdout 只能包含一份描述 JSON，診斷訊息寫入 stderr：
+CLI 作者可實作以下握手；stdout 只能包含一份描述 JSON，診斷訊息寫入 stderr。沒有握手功能時，可改用上述同目錄外部規格檔：
 
 ```text
 your-cli.exe --cli-bridger-describe
@@ -227,7 +247,7 @@ CLI 可在參數中使用 `env` 指定環境變數名稱，取代 `flag`。例�
 
 拖曳選取文字後可按「複製選取」或 Ctrl+C；沒有選取文字時，Ctrl+C 仍會送往程序以中斷執行。「複製全部」會複製目前保留的終端文字（含最多 5,000 行捲動記錄），適合貼上除錯；這不是完整的歷史紀錄檔。
 
-執行前由 Go 重新驗證參數，直接啟動執行檔或選定的腳本執行器，不拼接 shell 指令。Discovery 與執行共用同一組執行器／腳本引數。預覽以引數邊界顯示，並非可直接貼入所有 shell 的指令字串。工作目錄繼承 App 啟動目錄。讀取格式也會執行工具，請選擇可信任的 CLI。
+執行前由 Go 重新驗證參數，直接啟動執行檔或選定的腳本執行器，不拼接 shell 指令。Discovery 與執行共用同一組執行器／腳本引數。預覽以引數邊界顯示，並非可直接貼入所有 shell 的指令字串。工作目錄繼承 App 啟動目錄。沒有外部規格檔時，讀取規格也會執行工具；請選擇可信任的 CLI。
 
 ## 範圍與限制
 

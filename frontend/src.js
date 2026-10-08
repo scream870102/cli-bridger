@@ -9,11 +9,12 @@ const backend = Object.fromEntries(['Describe','Reload','PickPath','Preview','Ru
 const api = () => backend;
 const terminal = new Terminal({convertEol:false, fontFamily:'Cascadia Code, Consolas, monospace',fontSize:16,lineHeight:1.2,scrollback:5000,theme:{background:'#121212',foreground:'#f0f0f0',cursor:'#E28C91'}});
 const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open($('terminal')); fit.fit();
-let descriptor, path=[], values={}, enabled={}, running=false, revision=0, inputGeneration=0;
+let descriptor, descriptionFile='', path=[], values={}, enabled={}, running=false, revision=0, inputGeneration=0;
+function setDescriptionSource(file='') { descriptionFile=file; $('source-warning').hidden=!file; $('source-path').textContent=file?`來源檔案：${file}`:''; }
 function error(e) { $('error').hidden=!e; $('error').textContent=e ? String(e) : ''; }
 function busy(value) { running=value; inputGeneration++; $('terminal-input').disabled=true; $('send-input').disabled=true; $('commands').inert=value||!descriptor; $('fields').disabled=value||!descriptor; $('run').disabled=value||!descriptor; $('reload').disabled=value||!descriptor; $('stop').disabled=!value; for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=value; $('status').textContent=value?'執行中':descriptor?'已連接':'尚未連接'; }
 async function attempt(fn) { try { error(''); await fn(); } catch(e) {error(e);} }
-function invalidate() { descriptor=null;revision++;$('reload').hidden=true;$('commands').replaceChildren();$('parameters').replaceChildren();$('raw').textContent='尚未載入';$('preview').textContent='請讀取工具規格';$('description').textContent='載入工具後，這裡會顯示指令與參數。';busy(false); }
+function invalidate() { descriptor=null;setDescriptionSource();revision++;$('reload').hidden=true;$('commands').replaceChildren();$('parameters').replaceChildren();$('raw').textContent='尚未載入';$('preview').textContent='請讀取工具規格';$('description').textContent='載入工具後，這裡會顯示指令與參數。';busy(false); }
 function el(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
 function commandChain() { const list=[descriptor.root]; for(const id of path)list.push(list.at(-1).commands.find(c=>c.id===id)); return list; }
 function effective(p) { return Object.hasOwn(values,p.id)?values[p.id]:p.default; }
@@ -34,7 +35,8 @@ async function preview() {
 function render() {
  const commands=$('commands'), parameters=$('parameters'); commands.replaceChildren(); parameters.replaceChildren();
  const chain=commandChain(), active=activeParameters();
- $('reload').hidden=!chain.some(c=>(c.parameters||[]).some(p=>p.env));
+ $('reload').hidden=!descriptionFile&&!chain.some(c=>(c.parameters||[]).some(p=>p.env));
+ $('reload').textContent=descriptionFile?'重新讀取規格檔':'套用環境並重讀規格';
  chain.forEach((command,level)=>{
   if(command.commands?.length) {
    const row=el('div',undefined,'command-row'); row.append(el('span',level?'下一層子命令':'子命令','hint'));
@@ -89,7 +91,7 @@ $('runner').onchange=()=>{$('custom-runner-row').hidden=$('runner').value!=='cus
 $('browse-runner').onclick=()=>attempt(async()=>{const file=await api().PickPath('file');if(file){$('custom-runner').value=file;invalidate();}});
 $('load').onclick=()=>attempt(async()=>{
  invalidate();$('preview').textContent='讀取中…';for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=true;
- try {const runner=$('runner').value==='custom'?$('custom-runner').value:$('runner').value;if(!runner.trim())throw Error('請指定執行器路徑');const result=await api().Describe($('executable').value,runner);descriptor=result.descriptor;path=[];values={};enabled={};$('executable').value=result.target;$('description').textContent=`${descriptor.name} — ${descriptor.description||''}`;$('raw').textContent=result.raw;render();}
+ try {const runner=$('runner').value==='custom'?$('custom-runner').value:$('runner').value;if(!runner.trim())throw Error('請指定執行器路徑');const result=await api().Describe($('executable').value,runner);descriptor=result.descriptor;setDescriptionSource(result.descriptionFile);path=[];values={};enabled={};$('executable').value=result.target;$('description').textContent=`${descriptor.name} — ${descriptor.description||''}`;$('raw').textContent=result.raw;render();}
  finally{busy(false);}
 });
 $('run').onclick=()=>attempt(async()=>{busy(true);terminal.clear();$('copy-status').textContent='';$('terminal-input').value='';try{await api().Run(path,values,enabled,terminal.cols,terminal.rows);$('terminal-input').disabled=!running;$('send-input').disabled=!running;terminal.focus();}catch(e){busy(false);throw e;}});
@@ -99,7 +101,7 @@ $('reload').onclick=()=>attempt(async()=>{
  const retained={...values};for(const p of activeParameters().values())if(p.env&&effective(p)!==undefined)retained[p.id]=effective(p);
  revision++;busy(true);$('stop').disabled=true;$('status').textContent='重讀規格中…';
  try {
-  const result=await api().Reload(path,values,enabled);descriptor=result.descriptor;
+  const result=await api().Reload(path,values,enabled);descriptor=result.descriptor;setDescriptionSource(result.descriptionFile);
   let command=descriptor.root;const nextPath=[];
   for(const id of path){const next=command.commands?.find(c=>c.id===id);if(!next)break;nextPath.push(id);command=next;}path=nextPath;
   const nextValues={},nextEnabled={};

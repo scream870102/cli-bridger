@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/UserExistsError/conpty"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -19,18 +20,20 @@ import (
 )
 
 type App struct {
-	desktop    *application.App
-	mu         sync.Mutex
-	executable string
-	prefix     []string
-	descriptor *protocol.Descriptor
-	terminal   *conpty.ConPty
+	desktop         *application.App
+	mu              sync.Mutex
+	executable      string
+	prefix          []string
+	descriptor      *protocol.Descriptor
+	descriptionFile string
+	terminal        *conpty.ConPty
 }
 type Loaded struct {
-	Raw        string               `json:"raw"`
-	Descriptor *protocol.Descriptor `json:"descriptor"`
-	Executable string               `json:"executable"`
-	Target     string               `json:"target"`
+	Raw             string               `json:"raw"`
+	Descriptor      *protocol.Descriptor `json:"descriptor"`
+	Executable      string               `json:"executable"`
+	Target          string               `json:"target"`
+	DescriptionFile string               `json:"descriptionFile,omitempty"`
 }
 
 // A faulty CLI cannot fill memory indefinitely during discovery.
@@ -51,9 +54,20 @@ func (a *App) Describe(target, runner string) (*Loaded, error) {
 	a.descriptor = nil
 	a.executable = ""
 	a.prefix = nil
+	a.descriptionFile = ""
 	path, prefix, err := launcher.Resolve(target, runner)
 	if err != nil {
 		return nil, err
+	}
+	resolvedTarget := path
+	if len(prefix) > 0 {
+		resolvedTarget = prefix[len(prefix)-1]
+	}
+	descriptionFile := resolvedTarget + ".cli-bridger.json"
+	if _, err := os.Lstat(descriptionFile); err == nil {
+		return a.describeFile(path, prefix, descriptionFile)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("description file %q: %w", descriptionFile, err)
 	}
 	return a.describe(path, prefix, nil)
 }
@@ -67,6 +81,9 @@ func (a *App) Reload(path []string, values map[string]any, enabled map[string]bo
 	}
 	if a.descriptor == nil {
 		return nil, errors.New("load a CLI description first")
+	}
+	if a.descriptionFile != "" {
+		return a.describeFile(a.executable, a.prefix, a.descriptionFile)
 	}
 	env, err := protocol.BuildEnvironment(a.descriptor, path, values, enabled)
 	if err != nil {
@@ -89,18 +106,51 @@ func (a *App) describe(path string, prefix []string, environment map[string]stri
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("CLI description failed (requires --cli-bridger-describe): %w; %s", err, diagnostic.String())
 	}
-	d, err := protocol.Parse(out.Bytes())
+	return a.acceptDescription(path, prefix, out.Bytes(), "")
+}
+
+// Caller holds mu. Reload never switches an external description to discovery.
+func (a *App) describeFile(path string, prefix []string, descriptionFile string) (*Loaded, error) {
+	f, err := os.Open(descriptionFile)
+	if err != nil {
+		return nil, fmt.Errorf("description file %q: %w", descriptionFile, err)
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("description file %q: %w", descriptionFile, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("description file %q must be a regular file", descriptionFile)
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, 1024*1024+1))
+	if err != nil {
+		return nil, fmt.Errorf("description file %q: %w", descriptionFile, err)
+	}
+	if len(raw) > 1024*1024 {
+		return nil, fmt.Errorf("description file %q exceeds 1 MiB", descriptionFile)
+	}
+	loaded, err := a.acceptDescription(path, prefix, raw, descriptionFile)
+	if err != nil {
+		return nil, fmt.Errorf("description file %q: %w", descriptionFile, err)
+	}
+	return loaded, nil
+}
+
+func (a *App) acceptDescription(path string, prefix []string, raw []byte, descriptionFile string) (*Loaded, error) {
+	d, err := protocol.Parse(raw)
 	if err != nil {
 		return nil, err
 	}
 	a.descriptor = d
 	a.executable = path
 	a.prefix = prefix
+	a.descriptionFile = descriptionFile
 	resolvedTarget := path
 	if len(prefix) > 0 {
 		resolvedTarget = prefix[len(prefix)-1]
 	}
-	return &Loaded{Raw: out.String(), Descriptor: d, Executable: path, Target: resolvedTarget}, nil
+	return &Loaded{Raw: string(raw), Descriptor: d, Executable: path, Target: resolvedTarget, DescriptionFile: descriptionFile}, nil
 }
 func (a *App) PickPath(kind string) (string, error) {
 	switch kind {

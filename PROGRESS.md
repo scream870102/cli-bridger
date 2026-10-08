@@ -1,5 +1,18 @@
 # CLI Bridger
 
+## Completed task: external descriptions for third-party CLIs (2026-10-08)
+
+Goal: load a user-authored descriptor beside a CLI that cannot respond to discovery, with a persistent accuracy/provenance warning.
+Acceptance: exact <full-target-filename>.cli-bridger.json lookup for executables/scripts; sidecar first without discovery; bounded same-schema validation and clear errors; reload preserves source and previous valid state on failure; native discovery unchanged; visible warning/path; working example, backend tests, real WebView smoke and independent review.
+Knowns: reuse v1 protocol and launch arguments; external-file source metadata comes from backend, never self-declared authorship. No new dependencies or schema expansion. No open questions.
+Plan completed: backend/tests by sidecar_backend; main integrated UI/docs/example; sidecar_review independently reviewed the implementation and executed the example.
+- [x] Exact native/script sidecar lookup; file-first discovery and fail-closed validation; source metadata and pinned reload with state retention.
+- [x] Persistent warning and source path, sidecar reload even without env parameters, native source transitions clear warning; all content rendered as text.
+- [x] Added examples/third-party.py and matching JSON, updated README/protocol docs.
+- [x] Vite build, all Go tests, production executable build, actual WebView smoke and independent review passed.
+Verification: .cache/sidecar-smoke.mjs exercised real third-party execution with Chinese argv, source warning, valid/invalid reload, retained input, safe text rendering, native discovery transition and 800px width. Screenshot .cache/sidecar-preview.png inspected. Regression tests in sidecar_windows_test.go cover native/script preview, malformed/oversized/nonregular/locked files, native fallback and deleted-sidecar reload. Build: build/bin/cli-bridger.exe. No commits/pushes or new dependencies; no required work remains.
+Verification lesson: xterm may defer DOM rendering when below the viewport; scroll the terminal into view before asserting rendered output in WebView tests.
+
 ## Completed task: GitHub tag releases (2026-10-08)
 
 Goal: pushing a version tag builds the Windows app and installer and publishes downloadable GitHub Release assets.
