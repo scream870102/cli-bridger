@@ -79,6 +79,9 @@ p { margin: 7px 0; }
 #runner { width: 145px; flex-shrink: 0; font-family: inherit; }
 .tool-hint { font-size: 14px; margin: 9px 0 0; }
 .tool-hint code { color: #eeeeee; }
+.settings-toolbar { margin-top: 14px; justify-content: space-between; flex-wrap: wrap; }
+#settings-message { margin: 8px 0 0; overflow-wrap: anywhere; }
+#settings-message[data-error="true"] { color: #ffbd99; }
 .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 26px; margin-bottom: 10px; }
 .section-heading > .hint { font-size: 14px; }
 .description { margin-bottom: 6px; }

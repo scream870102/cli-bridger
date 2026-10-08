@@ -5,16 +5,25 @@ import '@xterm/xterm/css/xterm.css';
 import './style.css';
 
 const $ = id => document.getElementById(id);
-const backend = Object.fromEntries(['Describe','Reload','PickPath','Preview','Run','Stop','Input','Resize'].map(name=>[name,(...args)=>Call.ByName(`main.App.${name}`,...args)]));
+const backend = Object.fromEntries(['Describe','Reload','PickPath','Preview','Run','Stop','Input','Resize','LoadSettings','SaveSettings','ResetSettings'].map(name=>[name,(...args)=>Call.ByName(`main.App.${name}`,...args)]));
 const api = () => backend;
 const terminal = new Terminal({convertEol:false, fontFamily:'Cascadia Code, Consolas, monospace',fontSize:16,lineHeight:1.2,scrollback:5000,theme:{background:'#121212',foreground:'#f0f0f0',cursor:'#E28C91'}});
 const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open($('terminal')); fit.fit();
 let descriptor, descriptionFile='', path=[], values={}, enabled={}, running=false, revision=0, inputGeneration=0;
+let settingsReady=false, settingsQueue=Promise.resolve(), settingsRevision=0;
+function settingsMessage(message, failed=false) { $('settings-message').textContent=message; $('settings-message').dataset.error=String(failed); $('settings-message').setAttribute('role',failed?'alert':'status'); }
+function saveSettings() {
+ if(!settingsReady)return;
+ const request=++settingsRevision;
+ const settings={target:$('executable').value,runner:$('runner').value,customRunner:$('custom-runner').value,path:[...path],values:{...values},enabled:{...enabled},hasDescriptor:!!descriptor};
+ settingsMessage('正在儲存設定…');
+ settingsQueue=settingsQueue.then(()=>api().SaveSettings(settings)).then(()=>{if(request===settingsRevision)settingsMessage('設定已儲存');}).catch(e=>{if(request===settingsRevision)settingsMessage(`設定未儲存：${e}`,true);});
+}
 function setDescriptionSource(file='') { descriptionFile=file; $('source-warning').hidden=!file; $('source-path').textContent=file?`來源檔案：${file}`:''; }
 function error(e) { $('error').hidden=!e; $('error').textContent=e ? String(e) : ''; }
-function busy(value) { running=value; inputGeneration++; $('terminal-input').disabled=true; $('send-input').disabled=true; $('commands').inert=value||!descriptor; $('fields').disabled=value||!descriptor; $('run').disabled=value||!descriptor; $('reload').disabled=value||!descriptor; $('stop').disabled=!value; for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=value; $('status').textContent=value?'執行中':descriptor?'已連接':'尚未連接'; }
+function busy(value) { running=value; inputGeneration++; $('reset-settings').disabled=value; $('terminal-input').disabled=true; $('send-input').disabled=true; $('commands').inert=value||!descriptor; $('fields').disabled=value||!descriptor; $('run').disabled=value||!descriptor; $('reload').disabled=value||!descriptor; $('stop').disabled=!value; for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=value; $('status').textContent=value?'執行中':descriptor?'已連接':'尚未連接'; }
 async function attempt(fn) { try { error(''); await fn(); } catch(e) {error(e);} }
-function invalidate() { descriptor=null;setDescriptionSource();revision++;$('reload').hidden=true;$('commands').replaceChildren();$('parameters').replaceChildren();$('raw').textContent='尚未載入';$('preview').textContent='請讀取工具規格';$('description').textContent='載入工具後，這裡會顯示指令與參數。';busy(false); }
+function invalidate() { descriptor=null;path=[];values={};enabled={};setDescriptionSource();revision++;$('reload').hidden=true;$('commands').replaceChildren();$('parameters').replaceChildren();$('raw').textContent='尚未載入';$('preview').textContent='請讀取工具規格';$('description').textContent='載入工具後，這裡會顯示指令與參數。';busy(false);saveSettings(); }
 function el(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
 function commandChain() { const list=[descriptor.root]; for(const id of path)list.push(list.at(-1).commands.find(c=>c.id===id)); return list; }
 function effective(p) { return Object.hasOwn(values,p.id)?values[p.id]:p.default; }
@@ -27,7 +36,8 @@ function activeParameters() {
  }
  return active;
 }
-async function preview() {
+async function preview(persist=true) {
+ if(persist)saveSettings();
  const request=++revision;
  try { const args=await api().Preview(path,values,enabled); if(request!==revision)return; $('preview').textContent=args.map(a=>JSON.stringify(a)).join(' '); $('run').disabled=running; }
  catch(e) { if(request!==revision)return; $('preview').textContent=String(e); $('run').disabled=true; }
@@ -90,8 +100,8 @@ $('browse').onclick=()=>attempt(async()=>{const file=await api().PickPath('file'
 $('runner').onchange=()=>{$('custom-runner-row').hidden=$('runner').value!=='custom';invalidate();};
 $('browse-runner').onclick=()=>attempt(async()=>{const file=await api().PickPath('file');if(file){$('custom-runner').value=file;invalidate();}});
 $('load').onclick=()=>attempt(async()=>{
- invalidate();$('preview').textContent='讀取中…';for(const id of ['load','browse','executable','runner','custom-runner','browse-runner'])$(id).disabled=true;
- try {const runner=$('runner').value==='custom'?$('custom-runner').value:$('runner').value;if(!runner.trim())throw Error('請指定執行器路徑');const result=await api().Describe($('executable').value,runner);descriptor=result.descriptor;setDescriptionSource(result.descriptionFile);path=[];values={};enabled={};$('executable').value=result.target;$('description').textContent=`${descriptor.name} — ${descriptor.description||''}`;$('raw').textContent=result.raw;render();}
+ invalidate();busy(true);$('stop').disabled=true;$('status').textContent='讀取規格中…';$('preview').textContent='讀取中…';
+ try {await settingsQueue;const runner=$('runner').value==='custom'?$('custom-runner').value:$('runner').value;if(!runner.trim())throw Error('請指定執行器路徑');const result=await api().Describe($('executable').value,runner);descriptor=result.descriptor;setDescriptionSource(result.descriptionFile);path=[];values={};enabled={};$('executable').value=result.target;$('description').textContent=`${descriptor.name} — ${descriptor.description||''}`;$('raw').textContent=result.raw;render();}
  finally{busy(false);}
 });
 $('run').onclick=()=>attempt(async()=>{busy(true);terminal.clear();$('copy-status').textContent='';$('terminal-input').value='';try{await api().Run(path,values,enabled,terminal.cols,terminal.rows);$('terminal-input').disabled=!running;$('send-input').disabled=!running;terminal.focus();}catch(e){busy(false);throw e;}});
@@ -101,6 +111,7 @@ $('reload').onclick=()=>attempt(async()=>{
  const retained={...values};for(const p of activeParameters().values())if(p.env&&effective(p)!==undefined)retained[p.id]=effective(p);
  revision++;busy(true);$('stop').disabled=true;$('status').textContent='重讀規格中…';
  try {
+  await settingsQueue;
   const result=await api().Reload(path,values,enabled);descriptor=result.descriptor;setDescriptionSource(result.descriptionFile);
   let command=descriptor.root;const nextPath=[];
   for(const id of path){const next=command.commands?.find(c=>c.id===id);if(!next)break;nextPath.push(id);command=next;}path=nextPath;
@@ -155,3 +166,35 @@ terminal.attachCustomKeyEventHandler(event=>{
 new ResizeObserver(()=>{fit.fit();if(running)api().Resize(terminal.cols,terminal.rows).catch(error);}).observe($('terminal'));
 Events.On('terminal:data',event=>terminal.write(Uint8Array.from(atob(event.data),c=>c.charCodeAt(0))));
 Events.On('terminal:exit',event=>{terminal.write(`\r\n\x1b[90m${event.data}\x1b[0m\r\n`);busy(false);preview();});
+
+$('reset-settings').onclick=async()=>{
+ settingsReady=false;busy(true);$('stop').disabled=true;$('status').textContent='重置設定中…';
+ try {
+  await settingsQueue;
+  await api().ResetSettings();
+  $('executable').value='';$('runner').value='auto';$('custom-runner').value='';$('custom-runner-row').hidden=true;
+  $('terminal-input').value='';error('');invalidate();settingsMessage('已重置設定');
+ } catch(e) {settingsMessage(`重置失敗：${e}`,true);}
+ finally {settingsReady=true;busy(false);if(descriptor)preview(false);}
+};
+
+async function restoreSettings() {
+ busy(true);$('stop').disabled=true;$('status').textContent='還原設定中…';
+ try {
+  const restored=await api().LoadSettings();
+  if(!restored)return;
+  const saved=restored.settings;
+  $('executable').value=saved.target||'';$('runner').value=saved.runner||'auto';$('custom-runner').value=saved.customRunner||'';
+  $('custom-runner-row').hidden=$('runner').value!=='custom';
+  if(restored.loaded) {
+   const loaded=restored.loaded;descriptor=loaded.descriptor;setDescriptionSource(loaded.descriptionFile);
+   path=[];let command=descriptor.root;
+   for(const id of saved.path||[]){const next=command.commands?.find(c=>c.id===id);if(!next)break;path.push(id);command=next;}
+   values=saved.values||{};enabled=saved.enabled||{};
+   $('raw').textContent=loaded.raw;$('description').textContent=`${descriptor.name} — ${descriptor.description}`;render();
+  }
+  settingsMessage(restored.warning||(restored.loaded?'已還原上次設定；規格使用儲存的版本，需要更新時請重新讀取。':'已還原上次選取的工具，請讀取規格。'),!!restored.warning);
+ } catch(e) {settingsMessage(`無法還原設定：${e}。可按「重置設定」清除資料庫。`,true);}
+ finally {settingsReady=true;busy(false);if(descriptor)preview(false);}
+}
+restoreSettings();

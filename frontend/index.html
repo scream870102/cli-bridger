@@ -27,6 +27,8 @@
         </div>
         <div id="custom-runner-row" class="toolbar custom-runner" hidden><input id="custom-runner" aria-label="自訂執行器" placeholder="例如 C:\project\.venv\Scripts\python.exe"><button id="browse-runner">選擇執行器…</button></div>
         <p class="hint tool-hint">可在工具同目錄放置 <code>完整檔名.cli-bridger.json</code>（例如 <code>tool.exe.cli-bridger.json</code>）。找不到檔案時，才執行工具的 <code>--cli-bridger-describe</code> 查詢規格。</p>
+        <div class="toolbar settings-toolbar"><span class="hint">設定自動儲存在程式旁的 cli-bridger.db</span><button id="reset-settings" class="quiet" disabled>重置設定</button></div>
+        <p id="settings-message" class="hint" role="status"></p>
       </section>
       <div id="error" role="alert" hidden></div>
       <section class="parameter-section" aria-labelledby="parameter-heading">

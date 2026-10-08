@@ -1,5 +1,17 @@
 # CLI Bridger
 
+## Completed task: persistent settings database and reset (2026-10-08)
+
+Goal: save settings in cli-bridger.db beside the app executable, restore on startup and reset in one click.
+Acceptance: persistent target/runner/command/values/toggles plus cached validated descriptor; no CLI invocation on restore; external provenance warning retained; reset clears stored and visible settings; failures visible; tests/build/restart WebView check/independent review.
+Knowns: use pure-Go bbolt embedded DB; no CGO/compiler changes. Persist configuration only, not terminal output/input. User explicitly authorized adjacent DB and reset. Backend owns storage/tests/dependency; main owns UI/docs/integration. No open questions.
+- [x] Added bbolt v1.4.3 DB beside os.Executable, bounded settings and cached schema/source, serialized saves and recoverable storage errors.
+- [x] Automatic restore without invoking CLI; restores runner/command/parameters/toggles and external warning. Reset drains saves, deletes DB, clears form; disabled during execution/discovery.
+- [x] Backend tests, all Go tests, Vite/production builds and independent review passed.
+- [x] Actual process restart smoke passed: custom runner, nested command, Unicode/environment values, zero, false, enabled toggles, cached schema even with changed sidecar, no startup CLI invocation, successful manual run, pending-write reset, empty restart and corrupt-DB recovery. 800px layout has no overflow; screenshot inspected.
+Artifacts: .cache/settings-smoke.mjs, .cache/settings-preview.png; regression tests settings_windows_test.go; rebuilt build/bin/cli-bridger.exe. Test apps used isolated .cache/settings-smoke-* executable/DB/WebView directories and were closed afterward. Existing installed application and its settings were untouched. No commit/push; no required work remains.
+Verification lesson: set CLI_BRIDGER_WEBVIEW_DATA to an isolated test directory when the user's installed app is already running, avoiding shared WebView profile locks.
+
 ## Completed task: external descriptions for third-party CLIs (2026-10-08)
 
 Goal: load a user-authored descriptor beside a CLI that cannot respond to discovery, with a persistent accuracy/provenance warning.

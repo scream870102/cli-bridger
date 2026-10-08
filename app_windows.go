@@ -27,6 +27,7 @@ type App struct {
 	descriptor      *protocol.Descriptor
 	descriptionFile string
 	terminal        *conpty.ConPty
+	settingsPath    string
 }
 type Loaded struct {
 	Raw             string               `json:"raw"`
